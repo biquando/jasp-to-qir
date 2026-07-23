@@ -1,0 +1,39 @@
+# CMake and LLVM build artifacts
+/build/
+/cmake-build-*/
+/CMakeFiles/
+/CMakeCache.txt
+/Makefile
+/cmake_install.cmake
+/compile_commands.json
+*.cmake
+*.o
+*.a
+*.bc
+
+# Python environments, caches, and test tooling
+/venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.cache/
+
+# Generated QIR and conversion intermediates
+*.ll
+*.generic.mlir
+*.qir.mlir
+*.llvm.mlir
+*.raw.ll
+
+# Coverage and test output
+.coverage
+htmlcov/
+
+# Editors and operating systems
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo

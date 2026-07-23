@@ -1,0 +1,2 @@
+qir-qis==0.1.10
+qrisp[xdsl]==0.9.5
