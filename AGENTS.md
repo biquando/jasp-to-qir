@@ -76,9 +76,25 @@ Use qir-runner to run a QIR file.
 - QIR ABI details matter: use supported QIS/runtime declarations, required
   module flags, entry-point attributes, and correct function attributes for
   irreversible measurement and reset operations.
+- Static resource management is the driver default and uses consecutive QIR
+  resource handles. Dynamic mode is selected with
+  `--resource-management dynamic` and uses the Adaptive Profile's optional
+  qubit/result allocation and array APIs.
+- Dynamic `jasp.create_qubits` uses fixed-size classical pointer storage with
+  `__quantum__rt__qubit_array_allocate`; explicit `jasp.delete_qubits` emits
+  the matching release, while undeleted allocations remain live until runtime
+  teardown. Allocation calls receive a null error pointer and terminate on
+  failure.
+- Scalar measurements dynamically allocate and record one result. Qubit-array
+  measurements use result arrays and one array output record while retaining
+  Jasp's packed integer for classical control flow. Qubit-array sizes must be
+  compile-time constants in both modes because the targeted Quantinuum ABI
+  requires fixed-size classical pointer buffers.
 - Record a measurement result immediately after its corresponding `mz` call;
   do not defer output recording to function exit. Output labels use the
   `bit_<n>` form.
+- Lower Jasp `cx` to QIR `cnot`. Lower array reset through SCF so standard
+  SCF-to-CF conversion preserves source control flow instead of unrolling it.
 - Unsupported quantum gates should produce a clear conversion error rather
   than silently generating different behavior.
 - Dialect operations that are parsed but not yet assigned Adaptive-Profile QIR
