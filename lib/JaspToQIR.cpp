@@ -12,6 +12,7 @@
 #include "mlir/IR/Matchers.h"
 #include "mlir/Pass/Pass.h"
 #include "mlir/Transforms/DialectConversion.h"
+#include "llvm/Support/CommandLine.h"
 
 using namespace mlir;
 
@@ -46,11 +47,12 @@ const GateSpec *findGate(StringRef name) {
   return nullptr;
 }
 
-/// Builds the lowered representation of a Jasp qubit array: `{base, size}`
-/// encoded as two i64 values.
-LLVM::LLVMStructType llvmQubitArrayType(MLIRContext *context) {
+/// Builds the lowered representation of a Jasp qubit array. Static mode uses
+/// `{base:i64, size:i64}` while dynamic mode uses `{buffer:ptr, size:i64}`.
+LLVM::LLVMStructType llvmQubitArrayType(MLIRContext *context, bool dynamic) {
   Type i64 = IntegerType::get(context, 64);
-  return LLVM::LLVMStructType::getLiteral(context, {i64, i64});
+  Type base = dynamic ? Type(LLVM::LLVMPointerType::get(context)) : i64;
+  return LLVM::LLVMStructType::getLiteral(context, {base, i64});
 }
 
 /// Finds an LLVM declaration in the enclosing module or inserts one with the
@@ -91,6 +93,20 @@ void emitQisCall(OpBuilder &builder, Location location, StringRef gate,
                        arguments);
 }
 
+/// Declares and emits a QIR runtime call.
+LLVM::CallOp emitRuntimeCall(OpBuilder &builder, Location location,
+                             StringRef name, TypeRange resultTypes,
+                             ValueRange arguments) {
+  Type resultType = resultTypes.empty()
+                        ? Type(LLVM::LLVMVoidType::get(builder.getContext()))
+                        : resultTypes.front();
+  getOrDeclareFunction(builder, location, name, resultType,
+                       arguments.getTypes());
+  return LLVM::CallOp::create(
+      builder, location, resultTypes,
+      FlatSymbolRefAttr::get(builder.getContext(), name), arguments);
+}
+
 /// Materializes a signed 64-bit LLVM integer constant used by QIR handles and
 /// qubit-array bookkeeping.
 Value llvmConstant(OpBuilder &builder, Location location, int64_t value) {
@@ -105,14 +121,99 @@ Value llvmIntToPtr(OpBuilder &builder, Location location, int64_t id) {
       llvmConstant(builder, location, id));
 }
 
+/// Returns a pointer to a module-level `bit_<n>` output label, creating the
+/// global string constant if necessary.
+Value outputLabel(OpBuilder &builder, Location location, int64_t index) {
+  ModuleOp module =
+      builder.getInsertionBlock()->getParentOp()->getParentOfType<ModuleOp>();
+  if (!module) {
+    module = cast<ModuleOp>(builder.getInsertionBlock()->getParentOp());
+  }
+
+  std::string name = (llvm::Twine("label") + llvm::Twine(index)).str();
+  if (!module.lookupSymbol<LLVM::GlobalOp>(name)) {
+    std::string value = (llvm::Twine("bit_") + llvm::Twine(index)).str();
+    value.push_back('\0');
+    Type type = LLVM::LLVMArrayType::get(builder.getI8Type(), value.size());
+    OpBuilder::InsertionGuard guard(builder);
+    builder.setInsertionPointToStart(module.getBody());
+    LLVM::GlobalOp::create(builder, location, type, true,
+                           LLVM::Linkage::Internal, name,
+                           builder.getStringAttr(value));
+  }
+
+  return LLVM::AddressOfOp::create(
+      builder, location, LLVM::LLVMPointerType::get(builder.getContext()),
+      name);
+}
+
+void recordResult(OpBuilder &builder, Location location, Value result,
+                  int64_t outputIndex) {
+  Value label = outputLabel(builder, location, outputIndex);
+  emitRuntimeCall(builder, location, "__quantum__rt__result_record_output",
+                  TypeRange{}, ValueRange{result, label});
+}
+
+Value pointerElement(OpBuilder &builder, Location location, Value buffer,
+                     Value index) {
+  Type pointerType = LLVM::LLVMPointerType::get(builder.getContext());
+  Value address = LLVM::GEPOp::create(builder, location, pointerType,
+                                      pointerType, buffer, ValueRange{index});
+  return LLVM::LoadOp::create(builder, location, pointerType, address, 8);
+}
+
+Value fixedPointerBuffer(OpBuilder &builder, Location location, int64_t count) {
+  Type pointerType = LLVM::LLVMPointerType::get(builder.getContext());
+  Type arrayType = LLVM::LLVMArrayType::get(pointerType, count);
+  return LLVM::AllocaOp::create(builder, location, pointerType, arrayType,
+                                llvmConstant(builder, location, 1), 8);
+}
+
+Block *functionEntryBlock(Operation *operation) {
+  if (auto function = operation->getParentOfType<func::FuncOp>()) {
+    return &function.getBody().front();
+  }
+  if (auto function = operation->getParentOfType<LLVM::LLVMFuncOp>()) {
+    return &function.getBody().front();
+  }
+  return nullptr;
+}
+
+void releaseAtFunctionReturns(Operation *operation, StringRef name,
+                              ValueRange arguments) {
+  Operation *function = operation->getParentOfType<func::FuncOp>();
+  if (!function) {
+    function = operation->getParentOfType<LLVM::LLVMFuncOp>();
+  }
+  assert(function && "expected measurement inside a function");
+
+  SmallVector<Operation *> returns;
+  function->walk([&](Operation *nested) {
+    if (isa<func::ReturnOp, LLVM::ReturnOp>(nested)) {
+      returns.push_back(nested);
+    }
+  });
+  for (Operation *returnOp : returns) {
+    OpBuilder builder(returnOp);
+    emitRuntimeCall(builder, returnOp->getLoc(), name, TypeRange{}, arguments);
+  }
+}
+
+bool isInsideLoop(Operation *operation) {
+  return operation->getParentOfType<scf::ForOp>() ||
+         operation->getParentOfType<scf::ParallelOp>() ||
+         operation->getParentOfType<scf::WhileOp>();
+}
+
 /// Measures one qubit into its assigned QIR result slot and reads the slot
 /// immediately, returning the resulting i1 value.
-Value measureQubit(OpBuilder &builder, Location location, Value qubit,
-                   int64_t resultId) {
+Value measureStaticQubit(OpBuilder &builder, Location location, Value qubit,
+                         int64_t resultId) {
 
   // Measure qubit into result
   Value result = llvmIntToPtr(builder, location, resultId);
   emitQisCall(builder, location, "mz", ValueRange{qubit, result});
+  recordResult(builder, location, result, resultId);
 
   // Read result into an LLVM i1
   constexpr StringLiteral readResultName = "__quantum__rt__read_result";
@@ -140,18 +241,33 @@ template <typename OpTy> struct PassState final : OpConversionPattern<OpTy> {
 };
 
 struct LowerCreateQubits final : OpConversionPattern<jasp_ir::CreateQubitsOp> {
-  using OpConversionPattern::OpConversionPattern;
+  LowerCreateQubits(TypeConverter &converter, MLIRContext *context,
+                    bool dynamic)
+      : OpConversionPattern(converter, context), dynamic(dynamic) {}
   LogicalResult
   matchAndRewrite(jasp_ir::CreateQubitsOp op, OpAdaptor adaptor,
                   ConversionPatternRewriter &rewriter) const override {
-    auto type = llvmQubitArrayType(rewriter.getContext());
+    auto type = llvmQubitArrayType(rewriter.getContext(), dynamic);
 
     // Create an llvm struct to hold the qubit array base/size
     Value arrayStruct = LLVM::UndefOp::create(rewriter, op.getLoc(), type);
 
-    Value base = llvmConstant(rewriter, op.getLoc(),
-                          op->getAttrOfType<IntegerAttr>("qir.base").getInt());
     Value size = adaptor.getAmount();
+
+    Value base;
+    if (dynamic) {
+      Type pointerType = LLVM::LLVMPointerType::get(rewriter.getContext());
+      int64_t count = op->getAttrOfType<IntegerAttr>("qir.count").getInt();
+      base = fixedPointerBuffer(rewriter, op.getLoc(), count);
+      Value null = LLVM::ZeroOp::create(rewriter, op.getLoc(), pointerType);
+      emitRuntimeCall(rewriter, op.getLoc(),
+                      "__quantum__rt__qubit_array_allocate", TypeRange{},
+                      ValueRange{size, base, null});
+    } else {
+      base = llvmConstant(
+          rewriter, op.getLoc(),
+          op->getAttrOfType<IntegerAttr>("qir.base").getInt());
+    }
 
     // Insert qubit array base index at the struct's index 0
     arrayStruct = LLVM::InsertValueOp::create(
@@ -164,10 +280,14 @@ struct LowerCreateQubits final : OpConversionPattern<jasp_ir::CreateQubitsOp> {
     rewriter.replaceOp(op, {arrayStruct, adaptor.getQstIn()});
     return success();
   }
+
+private:
+  bool dynamic;
 };
 
 struct LowerGetQubit final : OpConversionPattern<jasp_ir::GetQubitOp> {
-  using OpConversionPattern::OpConversionPattern;
+  LowerGetQubit(TypeConverter &converter, MLIRContext *context, bool dynamic)
+      : OpConversionPattern(converter, context), dynamic(dynamic) {}
   LogicalResult
   matchAndRewrite(jasp_ir::GetQubitOp op, OpAdaptor adaptor,
                   ConversionPatternRewriter &rewriter) const override {
@@ -176,15 +296,46 @@ struct LowerGetQubit final : OpConversionPattern<jasp_ir::GetQubitOp> {
     Value base = LLVM::ExtractValueOp::create(
         rewriter, op.getLoc(), adaptor.getQbArray(), ArrayRef<int64_t>{0});
 
-    // The qubit index is the array base + position in the array
-    Value id =
-        LLVM::AddOp::create(rewriter, op.getLoc(), base, adaptor.getPosition());
-
-    // Returns an llvm ptr using inttoptr
-    rewriter.replaceOpWithNewOp<LLVM::IntToPtrOp>(
-        op, LLVM::LLVMPointerType::get(rewriter.getContext()), id);
+    if (dynamic) {
+      rewriter.replaceOp(op, pointerElement(rewriter, op.getLoc(), base,
+                                            adaptor.getPosition()));
+    } else {
+      Value id = LLVM::AddOp::create(rewriter, op.getLoc(), base,
+                                     adaptor.getPosition());
+      rewriter.replaceOpWithNewOp<LLVM::IntToPtrOp>(
+          op, LLVM::LLVMPointerType::get(rewriter.getContext()), id);
+    }
     return success();
   }
+
+private:
+  bool dynamic;
+};
+
+struct LowerDeleteQubits final
+    : OpConversionPattern<jasp_ir::DeleteQubitsOp> {
+  LowerDeleteQubits(TypeConverter &converter, MLIRContext *context,
+                    bool dynamic)
+      : OpConversionPattern(converter, context), dynamic(dynamic) {}
+
+  LogicalResult
+  matchAndRewrite(jasp_ir::DeleteQubitsOp op, OpAdaptor adaptor,
+                  ConversionPatternRewriter &rewriter) const override {
+    if (dynamic) {
+      Value buffer = LLVM::ExtractValueOp::create(
+          rewriter, op.getLoc(), adaptor.getQubits(), ArrayRef<int64_t>{0});
+      Value size = LLVM::ExtractValueOp::create(
+          rewriter, op.getLoc(), adaptor.getQubits(), ArrayRef<int64_t>{1});
+      emitRuntimeCall(rewriter, op.getLoc(),
+                      "__quantum__rt__qubit_array_release", TypeRange{},
+                      ValueRange{size, buffer});
+    }
+    rewriter.replaceOp(op, adaptor.getInQst());
+    return success();
+  }
+
+private:
+  bool dynamic;
 };
 
 struct LowerGetSize final : OpConversionPattern<jasp_ir::GetSizeOp> {
@@ -199,7 +350,8 @@ struct LowerGetSize final : OpConversionPattern<jasp_ir::GetSizeOp> {
 };
 
 struct LowerReset final : OpConversionPattern<jasp_ir::ResetOp> {
-  using OpConversionPattern::OpConversionPattern;
+  LowerReset(TypeConverter &converter, MLIRContext *context, bool dynamic)
+      : OpConversionPattern(converter, context), dynamic(dynamic) {}
   LogicalResult
   matchAndRewrite(jasp_ir::ResetOp op, OpAdaptor adaptor,
                   ConversionPatternRewriter &rewriter) const override {
@@ -225,9 +377,14 @@ struct LowerReset final : OpConversionPattern<jasp_ir::ResetOp> {
       scf::ForOp::create(
           rewriter, op.getLoc(), zero, size, one, ValueRange{},
           [&](OpBuilder &builder, Location location, Value index, ValueRange) {
-            Value id = LLVM::AddOp::create(builder, location, base, index);
-            Value qubit =
-                LLVM::IntToPtrOp::create(builder, location, pointerType, id);
+            Value qubit;
+            if (dynamic) {
+              qubit = pointerElement(builder, location, base, index);
+            } else {
+              Value id = LLVM::AddOp::create(builder, location, base, index);
+              qubit = LLVM::IntToPtrOp::create(builder, location, pointerType,
+                                               id);
+            }
             LLVM::CallOp::create(
                 builder, location, TypeRange{},
                 FlatSymbolRefAttr::get(builder.getContext(), resetName), qubit);
@@ -237,6 +394,9 @@ struct LowerReset final : OpConversionPattern<jasp_ir::ResetOp> {
     rewriter.replaceOp(op, adaptor.getInQst());
     return success();
   }
+
+private:
+  bool dynamic;
 };
 
 struct LowerGate final : OpConversionPattern<jasp_ir::QuantumGateOp> {
@@ -262,7 +422,8 @@ struct LowerGate final : OpConversionPattern<jasp_ir::QuantumGateOp> {
 };
 
 struct LowerMeasure final : OpConversionPattern<jasp_ir::MeasureOp> {
-  using OpConversionPattern::OpConversionPattern;
+  LowerMeasure(TypeConverter &converter, MLIRContext *context, bool dynamic)
+      : OpConversionPattern(converter, context), dynamic(dynamic) {}
   LogicalResult
   matchAndRewrite(jasp_ir::MeasureOp op, OpAdaptor adaptor,
                   ConversionPatternRewriter &rewriter) const override {
@@ -270,7 +431,41 @@ struct LowerMeasure final : OpConversionPattern<jasp_ir::MeasureOp> {
         op->getAttrOfType<IntegerAttr>("qir.result_base").getInt();
     Value qubits = adaptor.getMeasQ();
     if (isa<LLVM::LLVMPointerType>(qubits.getType())) {
-      Value bit = measureQubit(rewriter, op.getLoc(), qubits, resultBase);
+      Value bit;
+      if (dynamic) {
+        Type pointerType = LLVM::LLVMPointerType::get(rewriter.getContext());
+        Block *entry = functionEntryBlock(op);
+        if (!entry) {
+          return rewriter.notifyMatchFailure(op, "expected enclosing function");
+        }
+        Value result;
+        {
+          OpBuilder::InsertionGuard guard(rewriter);
+          rewriter.setInsertionPointToStart(entry);
+          Value null = LLVM::ZeroOp::create(rewriter, op.getLoc(), pointerType);
+          result = emitRuntimeCall(rewriter, op.getLoc(),
+                                   "__quantum__rt__result_allocate",
+                                   TypeRange{pointerType}, ValueRange{null})
+                       .getResult();
+        }
+        emitQisCall(rewriter, op.getLoc(), "mz", ValueRange{qubits, result});
+        recordResult(rewriter, op.getLoc(), result, resultBase);
+        constexpr StringLiteral readResultName =
+            "__quantum__rt__read_result";
+        bit = emitRuntimeCall(rewriter, op.getLoc(), readResultName,
+                              TypeRange{rewriter.getI1Type()},
+                              ValueRange{result})
+                  .getResult();
+        if (isInsideLoop(op)) {
+          releaseAtFunctionReturns(op, "__quantum__rt__result_release",
+                                   result);
+        } else {
+          emitRuntimeCall(rewriter, op.getLoc(),
+                          "__quantum__rt__result_release", TypeRange{}, result);
+        }
+      } else {
+        bit = measureStaticQubit(rewriter, op.getLoc(), qubits, resultBase);
+      }
       rewriter.replaceOp(op, {bit, adaptor.getInQst()});
       return success();
     }
@@ -278,15 +473,56 @@ struct LowerMeasure final : OpConversionPattern<jasp_ir::MeasureOp> {
     int64_t count = op->getAttrOfType<IntegerAttr>("qir.count").getInt();
     Value base = LLVM::ExtractValueOp::create(rewriter, op.getLoc(), qubits,
                                               ArrayRef<int64_t>{0});
+    Type pointerType = LLVM::LLVMPointerType::get(rewriter.getContext());
+    Value resultBuffer;
+    Value dynamicCount;
+    if (dynamic) {
+      Block *entry = functionEntryBlock(op);
+      if (!entry) {
+        return rewriter.notifyMatchFailure(op, "expected enclosing function");
+      }
+      {
+        OpBuilder::InsertionGuard guard(rewriter);
+        rewriter.setInsertionPointToStart(entry);
+        dynamicCount = llvmConstant(rewriter, op.getLoc(), count);
+        resultBuffer = fixedPointerBuffer(rewriter, op.getLoc(), count);
+        Value null = LLVM::ZeroOp::create(rewriter, op.getLoc(), pointerType);
+        emitRuntimeCall(rewriter, op.getLoc(),
+                        "__quantum__rt__result_array_allocate", TypeRange{},
+                        ValueRange{dynamicCount, resultBuffer, null});
+      }
+      for (int64_t index = 0; index < count; ++index) {
+        Value offset = llvmConstant(rewriter, op.getLoc(), index);
+        Value qubit = pointerElement(rewriter, op.getLoc(), base, offset);
+        Value result =
+            pointerElement(rewriter, op.getLoc(), resultBuffer, offset);
+        emitQisCall(rewriter, op.getLoc(), "mz", ValueRange{qubit, result});
+      }
+      Value label = outputLabel(rewriter, op.getLoc(), resultBase);
+      emitRuntimeCall(rewriter, op.getLoc(),
+                      "__quantum__rt__result_array_record_output", TypeRange{},
+                      ValueRange{dynamicCount, resultBuffer, label});
+    }
+
     Value packed = llvmConstant(rewriter, op.getLoc(), 0);
     for (int64_t index = 0; index < count; ++index) {
-      Value id = LLVM::AddOp::create(rewriter, op.getLoc(), base,
-                                     llvmConstant(rewriter, op.getLoc(), index));
-      Value qubit = LLVM::IntToPtrOp::create(
-          rewriter, op.getLoc(),
-          LLVM::LLVMPointerType::get(rewriter.getContext()), id);
-      Value bit =
-          measureQubit(rewriter, op.getLoc(), qubit, resultBase + index);
+      Value offset = llvmConstant(rewriter, op.getLoc(), index);
+      Value bit;
+      if (dynamic) {
+        Value result =
+            pointerElement(rewriter, op.getLoc(), resultBuffer, offset);
+        bit = emitRuntimeCall(rewriter, op.getLoc(),
+                              "__quantum__rt__read_result",
+                              TypeRange{rewriter.getI1Type()},
+                              ValueRange{result})
+                  .getResult();
+      } else {
+        Value id = LLVM::AddOp::create(rewriter, op.getLoc(), base, offset);
+        Value qubit = LLVM::IntToPtrOp::create(
+            rewriter, op.getLoc(), pointerType, id);
+        bit = measureStaticQubit(rewriter, op.getLoc(), qubit,
+                                 resultBase + index);
+      }
       Value extended = LLVM::ZExtOp::create(rewriter, op.getLoc(),
                                             rewriter.getI64Type(), bit);
       Value shifted =
@@ -294,9 +530,23 @@ struct LowerMeasure final : OpConversionPattern<jasp_ir::MeasureOp> {
                               llvmConstant(rewriter, op.getLoc(), index));
       packed = LLVM::OrOp::create(rewriter, op.getLoc(), packed, shifted);
     }
+    if (dynamic) {
+      if (isInsideLoop(op)) {
+        releaseAtFunctionReturns(
+            op, "__quantum__rt__result_array_release",
+            ValueRange{dynamicCount, resultBuffer});
+      } else {
+        emitRuntimeCall(rewriter, op.getLoc(),
+                        "__quantum__rt__result_array_release", TypeRange{},
+                        ValueRange{dynamicCount, resultBuffer});
+      }
+    }
     rewriter.replaceOp(op, {packed, adaptor.getInQst()});
     return success();
   }
+
+private:
+  bool dynamic;
 };
 
 /// Converts
@@ -406,16 +656,34 @@ struct JaspToQIRPass final
     : PassWrapper<JaspToQIRPass, OperationPass<ModuleOp>> {
   MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(JaspToQIRPass)
 
+  JaspToQIRPass() = default;
+  JaspToQIRPass(const JaspToQIRPass &other) : PassWrapper(other) {
+    resourceManagement = other.resourceManagement;
+  }
+
   StringRef getArgument() const final { return "lower-jasp-to-qir"; }
   StringRef getDescription() const final {
     return "Lower typed Jasp operations before standard LLVM conversion";
   }
+
+  Option<std::string> resourceManagement{
+      *this, "resource-management",
+      llvm::cl::desc("QIR resource management mode: static or dynamic"),
+      llvm::cl::init("static")};
 
   void runOnOperation() override {
     MLIRContext &context = getContext();
     context.loadDialect<arith::ArithDialect, func::FuncDialect,
                         jasp_ir::JaspDialect, LLVM::LLVMDialect,
                         scf::SCFDialect, tensor::TensorDialect>();
+
+    if (resourceManagement != "static" && resourceManagement != "dynamic") {
+      getOperation().emitError()
+          << "resource-management must be 'static' or 'dynamic'";
+      signalPassFailure();
+      return;
+    }
+    bool dynamic = resourceManagement == "dynamic";
 
     int64_t nextQubit = 0;
     int64_t nextResult = 0;
@@ -454,14 +722,19 @@ struct JaspToQIRPass final
       } else if (auto create = dyn_cast<jasp_ir::CreateQubitsOp>(operation)) {
         APInt numQubitsValue;
         if (!matchPattern(create.getAmount(), m_ConstantInt(&numQubitsValue))) {
-          create.emitError("Creating a qubit array with dynamic size is "
-                           "not supported");
+          create.emitError("QIR array backing storage requires a "
+                           "compile-time constant size");
           return WalkResult::interrupt();
         }
         int64_t numQubits = numQubitsValue.getSExtValue();
+        if (!dynamic) {
+          create->setAttr(
+              "qir.base",
+              IntegerAttr::get(IntegerType::get(&context, 64), nextQubit));
+        }
         create->setAttr(
-            "qir.base",
-            IntegerAttr::get(IntegerType::get(&context, 64), nextQubit));
+            "qir.count",
+            IntegerAttr::get(IntegerType::get(&context, 64), numQubits));
         qubitArraySizes[create.getResult()] = numQubits;
         nextQubit += numQubits;
 
@@ -515,10 +788,14 @@ struct JaspToQIRPass final
     // These are QIR attributes. We store them in MLIR as module attributes.
     ModuleOp module = getOperation();
     auto i64 = IntegerType::get(&context, 64);
-    module->setAttr("jasp.required_num_qubits",
-                    IntegerAttr::get(i64, nextQubit));
-    module->setAttr("jasp.required_num_results",
-                    IntegerAttr::get(i64, nextResult));
+    module->setAttr("jasp.resource_management",
+                    StringAttr::get(&context, resourceManagement));
+    if (!dynamic) {
+      module->setAttr("jasp.required_num_qubits",
+                      IntegerAttr::get(i64, nextQubit));
+      module->setAttr("jasp.required_num_results",
+                      IntegerAttr::get(i64, nextResult));
+    }
     module->setAttr("jasp.ir_functions",
                     BoolAttr::get(&context, functionCount > 1));
     module->setAttr("jasp.backwards_branching",
@@ -556,9 +833,10 @@ struct JaspToQIRPass final
       return LLVM::LLVMPointerType::get(&context);
     });
 
-    // qubit array -> llvm struct type { base:i64, size:i64 }
-    converter.addConversion(
-        [&](jasp_ir::QubitArrayType) -> Type { return llvmQubitArrayType(&context); });
+    // qubit array -> static {base:i64, size:i64} or dynamic {ptr, size:i64}
+    converter.addConversion([&](jasp_ir::QubitArrayType) -> Type {
+      return llvmQubitArrayType(&context, dynamic);
+    });
 
 
     ConversionTarget target(context);
@@ -587,10 +865,11 @@ struct JaspToQIRPass final
     patterns
         .add<PassState<jasp_ir::CreateQuantumKernelOp>,
              PassState<jasp_ir::ConsumeQuantumKernelOp>,
-             PassState<jasp_ir::DeleteQubitsOp>, LowerCreateQubits,
-             LowerGetQubit, LowerGetSize, LowerReset, LowerGate, LowerMeasure,
+             LowerGetSize, LowerGate,
              ScalarConstant, ScalarExtract, ScalarFromElements>(converter,
                                                                 &context);
+    patterns.add<LowerCreateQubits, LowerDeleteQubits, LowerGetQubit,
+                 LowerReset, LowerMeasure>(converter, &context, dynamic);
     populateFunctionOpInterfaceTypeConversionPattern<func::FuncOp>(patterns,
                                                                    converter);
     populateCallOpTypeConversionPattern(patterns, converter);

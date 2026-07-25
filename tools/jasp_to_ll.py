@@ -16,8 +16,9 @@ MLIR_TRANSLATE = LLVM_BIN / "mlir-translate"
 
 @dataclass(frozen=True)
 class QirProfile:
-    qubits: int
-    results: int
+    resource_management: str
+    qubits: int | None
+    results: int | None
     ir_functions: bool
     backwards_branching: bool
     multiple_target_branching: bool
@@ -48,21 +49,23 @@ def read_profile(mlir: str) -> QirProfile:
             raise ValueError(f"lowering did not report {name}")
         return match.group(1) == "true"
 
+    mode_match = re.search(
+        r'jasp\.resource_management\s*=\s*"(static|dynamic)"', mlir
+    )
+    if not mode_match:
+        raise ValueError("lowering did not report resource_management")
+    mode = mode_match.group(1)
+
     return QirProfile(
-        qubits=integer("required_num_qubits"),
-        results=integer("required_num_results"),
+        resource_management=mode,
+        qubits=integer("required_num_qubits") if mode == "static" else None,
+        results=integer("required_num_results") if mode == "static" else None,
         ir_functions=boolean("ir_functions"),
         backwards_branching=boolean("backwards_branching"),
         multiple_target_branching=boolean("multiple_target_branching"),
         multiple_return_points=boolean("multiple_return_points"),
         float_computations=boolean("float_computations"),
     )
-
-
-def pointer(index: int) -> str:
-    if index == 0:
-        return "null"
-    return f"nonnull inttoptr (i64 {index} to ptr)"
 
 
 def instrument_main(llvm_ir: str) -> str:
@@ -98,43 +101,20 @@ def instrument_main(llvm_ir: str) -> str:
     return "\n".join(lines) + "\n"
 
 
-MEASUREMENT_CALL = re.compile(
-    r"@__quantum__qis__mz__body\(.*?,\s*ptr\s+"
-    r"(?P<pointer>null|(?:nonnull\s+)?inttoptr\s*\(i64\s+(?P<id>\d+)\s+to\s+ptr\))\)"
-)
-
-
-def record_measurements(llvm_ir: str) -> str:
-    """Record each result immediately after the measurement that writes it."""
-    lines: list[str] = []
-    for line in llvm_ir.splitlines():
-        lines.append(line)
-        match = MEASUREMENT_CALL.search(line)
-        if not match:
-            continue
-
-        resource = int(match.group("id") or 0)
-        indent = line[: len(line) - len(line.lstrip())]
-        lines.append(
-            f"{indent}call void @__quantum__rt__result_record_output"
-            f"(ptr {pointer(resource)}, ptr @label{resource})"
-        )
-    return "\n".join(lines) + "\n"
-
-
 def module_flags(profile: QirProfile) -> str:
     integer_types = '!{!"i64"}'
     float_types = '!{!"double"}' if profile.float_computations else "!{}"
+    dynamic = str(profile.resource_management == "dynamic").lower()
     return f"""!llvm.module.flags = !{{!0, !1, !2, !3, !4, !5, !6, !7, !8, !9, !10}}
 !0 = !{{i32 1, !"qir_major_version", i32 2}}
 !1 = !{{i32 7, !"qir_minor_version", i32 0}}
-!2 = !{{i32 1, !"dynamic_qubit_management", i1 false}}
-!3 = !{{i32 1, !"dynamic_result_management", i1 false}}
+!2 = !{{i32 1, !"dynamic_qubit_management", i1 {dynamic}}}
+!3 = !{{i32 1, !"dynamic_result_management", i1 {dynamic}}}
 !4 = !{{i32 1, !"ir_functions", i1 {str(profile.ir_functions).lower()}}}
 !5 = !{{i32 1, !"backwards_branching", i2 {1 if profile.backwards_branching else 0}}}
 !6 = !{{i32 1, !"multiple_target_branching", i1 {str(profile.multiple_target_branching).lower()}}}
 !7 = !{{i32 1, !"multiple_return_points", i1 {str(profile.multiple_return_points).lower()}}}
-!8 = !{{i32 1, !"arrays", i1 false}}
+!8 = !{{i32 1, !"arrays", i1 {dynamic}}}
 !9 = !{{i32 5, !"int_computations", !11}}
 !10 = !{{i32 5, !"float_computations", !12}}
 !11 = {integer_types}
@@ -155,6 +135,13 @@ def strip_translation_boilerplate(llvm_ir: str) -> str:
                 "declare void @__quantum__qis__reset__body",
                 "declare i1 @__quantum__rt__read_result",
                 "declare void @__quantum__rt__result_record_output",
+                "declare ptr @__quantum__rt__result_allocate",
+                "declare void @__quantum__rt__result_release",
+                "declare void @__quantum__rt__qubit_array_allocate",
+                "declare void @__quantum__rt__qubit_array_release",
+                "declare void @__quantum__rt__result_array_allocate",
+                "declare void @__quantum__rt__result_array_release",
+                "declare void @__quantum__rt__result_array_record_output",
                 "declare void @__quantum__rt__initialize",
             )
         )
@@ -162,17 +149,27 @@ def strip_translation_boilerplate(llvm_ir: str) -> str:
 
 
 def finalize_qir(profile: QirProfile, llvm_ir: str) -> str:
-    labels = "\n".join(
-        f'@label{index} = internal constant [{len(f"bit_{index}") + 1} x i8] '
-        f'c"bit_{index}\\00"'
-        for index in range(profile.results)
-    )
-    body = instrument_main(record_measurements(strip_translation_boilerplate(llvm_ir)))
+    body = instrument_main(strip_translation_boilerplate(llvm_ir))
+    dynamic_declarations = ""
+    entry_resources = ""
+    if profile.resource_management == "dynamic":
+        dynamic_declarations = """
+declare void @__quantum__rt__qubit_array_allocate(i64, ptr, ptr)
+declare void @__quantum__rt__qubit_array_release(i64, ptr)
+declare ptr @__quantum__rt__result_allocate(ptr)
+declare void @__quantum__rt__result_release(ptr)
+declare void @__quantum__rt__result_array_allocate(i64, ptr, ptr)
+declare void @__quantum__rt__result_array_release(i64, ptr)
+declare void @__quantum__rt__result_array_record_output(i64, ptr, ptr)
+"""
+    else:
+        entry_resources = (
+            f' "required_num_qubits"="{profile.qubits}"'
+            f' "required_num_results"="{profile.results}"'
+        )
     return f"""; QIR 2.1 Adaptive Profile
 %Qubit = type opaque
 %Result = type opaque
-
-{labels}
 
 {body}
 declare void @__quantum__qis__mz__body(ptr, ptr writeonly) #1
@@ -180,14 +177,20 @@ declare void @__quantum__qis__reset__body(ptr) #1
 declare void @__quantum__rt__initialize(ptr)
 declare i1 @__quantum__rt__read_result(ptr readonly)
 declare void @__quantum__rt__result_record_output(ptr, ptr)
+{dynamic_declarations}
 
-attributes #0 = {{ "entry_point" "qir_profiles"="adaptive_profile" "output_labeling_schema"="schema_id" "required_num_qubits"="{profile.qubits}" "required_num_results"="{profile.results}" }}
+attributes #0 = {{ "entry_point" "qir_profiles"="adaptive_profile" "output_labeling_schema"="schema_id"{entry_resources} }}
 attributes #1 = {{ "irreversible" }}
 
 {module_flags(profile)}"""
 
 
-def convert(input_path: Path, output_path: Path, keep_intermediates: bool = False) -> None:
+def convert(
+    input_path: Path,
+    output_path: Path,
+    keep_intermediates: bool = False,
+    resource_management: str = "static",
+) -> None:
     stem = output_path.with_suffix("")
     llvm = stem.with_suffix(".llvm.mlir")
     raw_llvm = stem.with_suffix(".raw.ll")
@@ -197,7 +200,7 @@ def convert(input_path: Path, output_path: Path, keep_intermediates: bool = Fals
         run(
             JASP_OPT,
             input_path,
-            "--lower-jasp-to-qir",
+            f"--lower-jasp-to-qir=resource-management={resource_management}",
             "--canonicalize",
             "--convert-scf-to-cf",
             "--convert-cf-to-llvm",
@@ -227,9 +230,20 @@ def main() -> None:
         action="store_true",
         help="retain generated .mlir and .raw.ll files",
     )
+    parser.add_argument(
+        "--resource-management",
+        choices=("static", "dynamic"),
+        default="static",
+        help="select static resource IDs or dynamic runtime allocation",
+    )
     args = parser.parse_args()
     try:
-        convert(args.input, args.output, args.keep_intermediates)
+        convert(
+            args.input,
+            args.output,
+            args.keep_intermediates,
+            args.resource_management,
+        )
     except ValueError as error:
         parser.exit(1, f"error: {error}\n")
     except subprocess.CalledProcessError as error:

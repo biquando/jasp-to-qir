@@ -19,7 +19,9 @@ The conversion has two stages:
 
 The final QIR uses standard `__quantum__qis__*__body` calls, output-recording
 runtime calls, entry-point attributes, and QIR module flags. Controlled-X is
-mapped from Jasp `cx` to QIR `cnot`.
+mapped from Jasp `cx` to QIR `cnot`. Resource management can be selected at
+conversion time: static mode uses consecutive QIR resource IDs, while dynamic
+mode uses the optional Adaptive Profile allocation and array APIs.
 
 Measurement results are recorded immediately after the measurement executes,
 so measurements in untaken control-flow branches are not emitted as outputs.
@@ -44,6 +46,29 @@ pip install -r requirements.txt
 ```sh
 python3 tools/jasp_to_ll.py input.mlir output.ll
 ```
+
+Static resource management is the default and preserves compatibility with
+backends that do not implement the optional allocation APIs. Select dynamic
+qubit/result management and arrays with:
+
+```sh
+python3 tools/jasp_to_ll.py --resource-management dynamic input.mlir output.ll
+```
+
+The underlying MLIR pass exposes the same choice as
+`--lower-jasp-to-qir="resource-management=dynamic"`. In dynamic mode,
+`jasp.create_qubits` uses a fixed-size LLVM pointer array and
+`__quantum__rt__qubit_array_allocate`; an explicit `jasp.delete_qubits` emits
+the matching release. Allocations without a Jasp delete remain live until
+runtime teardown. Allocation failures terminate execution because the runtime
+calls receive a null error pointer.
+
+Scalar measurements dynamically allocate and record one result. Qubit-array
+measurements allocate a result array and produce one array output record in
+qubit order, while retaining Jasp's packed integer value for classical use.
+Both modes currently require each Jasp qubit-array size to be a compile-time
+constant because the targeted Quantinuum QIR implementation requires
+fixed-size classical pointer buffers.
 
 The scripts use `/opt/homebrew/opt/llvm/bin` by default. Set `LLVM_BIN` when
 the LLVM tools are installed elsewhere:
