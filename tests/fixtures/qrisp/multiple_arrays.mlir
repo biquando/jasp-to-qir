@@ -38,12 +38,12 @@ builtin.module @jasp_module {
     %36 = arith.constant true
     %37 = arith.xori %35, %36 : i1
     %38 = scf.if %37 -> (!jasp.QuantumState) {
-      scf.yield %34 : !jasp.QuantumState
-    } else {
       %39 = arith.constant dense<1> : tensor<i64>
       %40 = jasp.get_qubit %1, %39 : !jasp.QubitArray, tensor<i64> -> !jasp.Qubit
       %41 = jasp.quantum_gate "x" (%40) , %34 : (!jasp.Qubit) , !jasp.QuantumState -> !jasp.QuantumState
       scf.yield %41 : !jasp.QuantumState
+    } else {
+      scf.yield %34 : !jasp.QuantumState
     }
     %42, %43 = jasp.measure %1, %38 : !jasp.QubitArray, !jasp.QuantumState -> tensor<i64>, !jasp.QuantumState
     func.return %18, %33, %42, %43 : tensor<i1>, tensor<i1>, tensor<i64>, !jasp.QuantumState

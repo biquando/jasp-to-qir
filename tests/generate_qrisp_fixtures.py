@@ -27,6 +27,73 @@ from qrisp import (
 from qrisp.jasp import jrange, q_cond, q_while_loop, Jaspr
 
 
+def basic():
+    register = QuantumVariable(2)
+    h(register[0])
+    return measure(register)
+
+
+def bell():
+    register = QuantumVariable(2)
+    h(register[0])
+    cx(register[0], register[1])
+    return measure(register)
+
+
+def lifecycle():
+    register = QuantumVariable(1)
+    outcome = measure(register[0])
+    register.delete()
+    return outcome
+
+
+def multiple_arrays():
+    data = QuantumVariable(3)
+    target = QuantumVariable(1)
+    control = QuantumVariable(1)
+
+    h(data[0])
+    cx(data[0], data[1])
+    cx(data[1], data[2])
+    h(control[0])
+    condition = measure(control[0])
+
+    def apply_x(register):
+        x(register[1])
+        return register
+
+    def apply_z(register):
+        z(register[2])
+        return register
+
+    data = q_cond(condition, apply_x, apply_z, data)
+    cx(data[0], target[0])
+    cx(data[1], target[0])
+    target_outcome = measure(target[0])
+
+    def correct_data(register):
+        x(register[1])
+        return register
+
+    def leave_unchanged(register):
+        return register
+
+    data = q_cond(target_outcome, leave_unchanged, correct_data, data)
+    return condition, target_outcome, measure(data)
+
+
+def tfim():
+    register = QuantumVariable(5)
+    for _ in jrange(4):
+        for index in range(4):
+            cx(register[index], register[index + 1])
+            rz(0.5, register[index + 1])
+            cx(register[index], register[index + 1])
+        for index in range(5):
+            rx(0.25, register[index])
+    return measure(register)
+
+
 def rotations():
     register = QuantumVariable(3)
     h(register[0])
@@ -150,15 +217,20 @@ def write_fixture(function, output: Path) -> None:
 
 
 FIXTURES = {
-    "adaptive.mlir": adaptive,
-    "broad_gates.mlir": broad_gate_set,
-    "conditional_measurement.mlir": conditional_measurement,
-    "loop.mlir": loop,
-    "many_results.mlir": many_results,
-    "measurement_feedback_loop.mlir": measurement_feedback_loop,
-    "reset.mlir": reset_chain,
-    "reset_array.mlir": reset_array,
+    "basic.mlir": basic,
+    "bell.mlir": bell,
+    "lifecycle.mlir": lifecycle,
+    "multiple_arrays.mlir": multiple_arrays,
+    "tfim.mlir": tfim,
     "rotations.mlir": rotations,
+    "adaptive.mlir": adaptive,
+    "loop.mlir": loop,
+    "reset_chain.mlir": reset_chain,
+    "reset_array.mlir": reset_array,
+    "many_results.mlir": many_results,
+    "conditional_measurement.mlir": conditional_measurement,
+    "broad_gates.mlir": broad_gate_set,
+    "measurement_feedback_loop.mlir": measurement_feedback_loop,
 }
 
 

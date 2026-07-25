@@ -9,8 +9,8 @@ The suite has five phases:
 
 1. Regenerate Qrisp fixtures and compare them byte-for-byte with the checked-in
    files under ``tests/fixtures/qrisp``.
-2. Convert every manual and Qrisp fixture in both static and dynamic resource
-   modes, then run the QIR and LLVM validators.
+2. Convert every Qrisp fixture in both static and dynamic resource modes, then
+   run the QIR and LLVM validators.
 3. Inspect representative LLVM output for semantic properties that structural
    validation alone cannot establish.
 4. Check diagnostics for invalid or unsupported Jasp input.
@@ -33,10 +33,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 TESTS = ROOT / "tests"
 
-# Fixture categories are kept separate so generated inputs, hand-written
-# regressions, and deliberately invalid programs have unambiguous ownership.
+# Generated inputs and deliberately invalid programs have separate ownership.
 FIXTURES = TESTS / "fixtures"
-MANUAL = FIXTURES / "manual"
 QRISP = FIXTURES / "qrisp"
 INVALID = FIXTURES / "invalid"
 TEMP_ROOT = TESTS / ".tmp"
@@ -171,7 +169,7 @@ def convert_and_validate(fixture: Path, mode: str, temp: Path) -> Path:
 def verify_valid_fixtures(temp: Path) -> dict[tuple[str, str], Path]:
     """Convert and validate every valid fixture in both resource modes."""
 
-    fixtures = sorted((*MANUAL.glob("*.mlir"), *QRISP.glob("*.mlir")))
+    fixtures = sorted(QRISP.glob("*.mlir"))
     outputs: dict[tuple[str, str], Path] = {}
     for mode in ("static", "dynamic"):
         for fixture in fixtures:
@@ -191,7 +189,7 @@ def verify_semantics(outputs: dict[tuple[str, str], Path], temp: Path) -> None:
             DRIVER,
             "--resource-management",
             "static",
-            MANUAL / "basic.mlir",
+            QRISP / "basic.mlir",
             explicit_static,
         ]
     )
@@ -326,7 +324,7 @@ def verify_intermediates(temp: Path) -> None:
             sys.executable,
             DRIVER,
             "--keep-intermediates",
-            MANUAL / "basic.mlir",
+            QRISP / "basic.mlir",
             output,
         ]
     )
