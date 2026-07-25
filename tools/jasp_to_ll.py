@@ -231,10 +231,9 @@ def main() -> None:
         help="retain generated .mlir and .raw.ll files",
     )
     parser.add_argument(
-        "--resource-management",
-        choices=("static", "dynamic"),
-        default="static",
-        help="select static resource IDs or dynamic runtime allocation",
+        "--dynamic",
+        action="store_true",
+        help="use dynamic runtime qubit/result allocation and arrays",
     )
     args = parser.parse_args()
     try:
@@ -242,7 +241,7 @@ def main() -> None:
             args.input,
             args.output,
             args.keep_intermediates,
-            args.resource_management,
+            "dynamic" if args.dynamic else "static",
         )
     except ValueError as error:
         parser.exit(1, f"error: {error}\n")

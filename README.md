@@ -24,17 +24,36 @@ and `LLVM_DIR` in the above commands, and also set `LLVM_BIN=/path/to/llvm/bin`.
 
 ## Usage
 
+Create a Qrisp/Jasp program, and output MLIR:
+
+```python
+from qrisp import *
+from qrisp.jasp import make_jaspr, Jaspr
+
+def bell():
+    q = QuantumVariable(2)
+    h(q[0])
+    cx(q[0], q[1])
+    return measure(q)
+
+jaspr = make_jaspr(bell)()
+assert type(jaspr) == Jaspr
+mlir = jaspr.to_mlir(lower_stablehlo=True)  # Make sure StableHLO is lowered!
+
+with open('bell.mlir', 'w') as f:
+    f.write(str(mlir))
+```
+
 Convert Jasp MLIR with **static** resource management, the default:
 
 ```sh
-python tools/jasp_to_ll.py input.mlir output.ll
+python tools/jasp_to_ll.py bell.mlir bell.ll
 ```
 
-To emit QIR using **dynamic** qubit/result management and arrays:
+Or emit QIR using **dynamic** qubit/result management and arrays:
 
 ```sh
-python tools/jasp_to_ll.py \
-  --resource-management dynamic input.mlir output.ll
+python tools/jasp_to_ll.py --dynamic bell.mlir bell.ll
 ```
 
 Use `--keep-intermediates` to retain the generated `.llvm.mlir` and `.raw.ll`

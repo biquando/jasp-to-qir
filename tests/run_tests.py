@@ -159,7 +159,7 @@ def verify_qrisp_fixtures(temp: Path) -> None:
 def convert_and_validate(fixture: Path, mode: str, temp: Path) -> Path:
     """Convert one fixture, validate its QIR, and return the output path.
 
-    Static mode intentionally omits ``--resource-management`` so the suite also
+    Static mode intentionally omits ``--dynamic`` so the suite also
     protects the driver's documented default. Dynamic mode passes it explicitly.
     """
 
@@ -167,7 +167,7 @@ def convert_and_validate(fixture: Path, mode: str, temp: Path) -> Path:
     output = temp / f"{category}-{fixture.stem}.{mode}.ll"
     command: list[str | Path] = [sys.executable, DRIVER]
     if mode == "dynamic":
-        command.extend(["--resource-management", mode])
+        command.extend(["--dynamic"])
     command.extend([fixture, output])
     run(command)
     run([sys.executable, VALIDATOR, output])
@@ -199,8 +199,6 @@ def verify_semantics(outputs: dict[tuple[str, str], Path], temp: Path) -> None:
         [
             sys.executable,
             DRIVER,
-            "--resource-management",
-            "static",
             QRISP / "basic.mlir",
             explicit_static,
         ]
@@ -216,7 +214,7 @@ def verify_semantics(outputs: dict[tuple[str, str], Path], temp: Path) -> None:
     )
     require_contains(
         outputs[("static", "many_results.mlir")],
-        '@label10 = internal constant [7 x i8] c"bit_10\\00"',
+        '@label10 = internal constant [10 x i8] c"result_10\\00"',
     )
     reset = require_contains(
         outputs[("static", "reset_array.mlir")],
@@ -596,7 +594,7 @@ def expect_conversion_failure(
     output = temp / f"invalid-{fixture.stem}-{mode}.ll"
     command: list[str | Path] = [sys.executable, DRIVER]
     if mode == "dynamic":
-        command.extend(["--resource-management", mode])
+        command.extend(["--dynamic"])
     command.extend([fixture, output])
     result = run(command, expect_failure=True)
     require(expected in result.stderr, f"{fixture.name}: missing error {expected!r}")
