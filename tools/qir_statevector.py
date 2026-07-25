@@ -3,7 +3,7 @@
 
 The utility lowers QIR to Quantinuum QIS, instruments the lowered entry point
 in a temporary copy, executes one ideal QuEST shot with Selene, extracts the
-resulting state dump, and writes the same ``pg-statevector-v1`` JSON format as
+resulting state dump, and writes the same ``jasp-to-qir-statevector-v1`` JSON format as
 ``qrisp_statevector.py``. The input QIR and the conversion pipeline are not
 modified.
 
@@ -53,10 +53,10 @@ import sys
 import tempfile
 
 
-FORMAT = "pg-statevector-v1"
+FORMAT = "jasp-to-qir-statevector-v1"
 TAG = "statevector"
 DUMP_TAG = f"USER:STATE:{TAG}"
-PREFIX = "__pg_statevector"
+PREFIX = "__jasp-to-qir_statevector"
 
 
 def entry_attribute_groups(source: str) -> set[str]:
@@ -295,7 +295,7 @@ def main() -> int:
                 "Selene is not installed; run: ./venv/bin/pip install selene-sim"
             ) from exc
 
-        with tempfile.TemporaryDirectory(prefix="pg-qir-statevector-") as directory:
+        with tempfile.TemporaryDirectory(prefix="jasp-to-qir-qir-statevector-") as directory:
             temporary = Path(directory)
             instrumented_path = temporary / "instrumented.ll"
             instrumented_path.write_text(instrumented, encoding="utf-8")

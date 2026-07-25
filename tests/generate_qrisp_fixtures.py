@@ -4,26 +4,8 @@
 import argparse
 from pathlib import Path
 
-from qrisp import (
-    QuantumVariable,
-    cx,
-    cz,
-    h,
-    make_jaspr,
-    mcx,
-    measure,
-    reset,
-    rx,
-    ry,
-    rz,
-    s,
-    s_dg,
-    t,
-    t_dg,
-    x,
-    y,
-    z,
-)
+from qrisp import *
+from qrisp.operators import QubitOperator, X, Z
 from qrisp.jasp import jrange, q_cond, q_while_loop, Jaspr
 
 
@@ -83,14 +65,23 @@ def multiple_arrays():
 
 
 def tfim():
-    register = QuantumVariable(5)
-    for _ in jrange(4):
-        for index in range(4):
-            cx(register[index], register[index + 1])
-            rz(0.5, register[index + 1])
-            cx(register[index], register[index + 1])
-        for index in range(5):
-            rx(0.25, register[index])
+    n = 5
+    J = 0.8
+    B = 1.2
+    t = 1
+    steps = 4
+
+    H = QubitOperator()
+    for i in range(n-1):
+        H += -J * Z(i) * Z(i+1)
+    for i in range(n):
+        H += -B * X(i)
+
+    U = H.trotterization(order=2)
+
+    register = QuantumVariable(n)
+    U(register, t=t, steps=steps)
+
     return measure(register)
 
 
@@ -252,14 +243,23 @@ def statevector_multiple_arrays():
 
 
 def statevector_tfim():
-    register = QuantumVariable(4)
-    for _ in jrange(3):
-        for index in range(3):
-            cx(register[index], register[index + 1])
-            rz(0.4, register[index + 1])
-            cx(register[index], register[index + 1])
-        for index in range(4):
-            rx(0.2, register[index])
+    n = 5
+    J = 0.8
+    B = 1.2
+    t = 1
+    steps = 4
+
+    H = QubitOperator()
+    for i in range(n-1):
+        H += -J * Z(i) * Z(i+1)
+    for i in range(n):
+        H += -B * X(i)
+
+    U = H.trotterization(order=2)
+
+    register = QuantumVariable(n)
+    U(register, t=t, steps=steps)
+
     return register
 
 
@@ -347,7 +347,7 @@ STATEVECTOR_CASES = {
     },
     "statevector_tfim.mlir": {
         "function": statevector_tfim,
-        "qubits": 4,
+        "qubits": 5,
     },
 }
 

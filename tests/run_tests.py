@@ -20,7 +20,7 @@ The suite has seven phases:
 
 Intermediate files and caches live in a per-run directory beneath the ignored
 ``tests/.tmp`` directory and are removed automatically. Semantic comparison
-values are retained in ``tests/results/semantic_results.json`` for inspection.
+values are retained in ``tests/results/semantic_results.txt`` for inspection.
 Set ``LLVM_BIN`` to override the default Homebrew LLVM tool directory.
 """
 
@@ -28,7 +28,6 @@ from __future__ import annotations
 
 import os
 import contextlib
-from datetime import datetime, timezone
 import importlib.util
 import io
 import json
@@ -47,7 +46,7 @@ QRISP = FIXTURES / "qrisp"
 INVALID = FIXTURES / "invalid"
 TEMP_ROOT = TESTS / ".tmp"
 RESULTS = TESTS / "results"
-SEMANTIC_REPORT = RESULTS / "semantic_results.json"
+SEMANTIC_REPORT = RESULTS / "semantic_results.txt"
 DRIVER = ROOT / "tools/jasp_to_ll.py"
 VALIDATOR = ROOT / "tools/validate_qir.py"
 GENERATOR = TESTS / "generate_qrisp_fixtures.py"
@@ -298,7 +297,7 @@ def load_statevector(path: Path) -> dict:
         document = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as error:
         raise TestFailure(f"cannot read state vector {path}: {error}") from error
-    require(document.get("format") == "pg-statevector-v1", f"{path}: bad format")
+    require(document.get("format") == "jasp-to-qir-statevector-v1", f"{path}: bad format")
     require(isinstance(document.get("num_qubits"), int), f"{path}: bad qubit count")
     require(isinstance(document.get("amplitudes"), list), f"{path}: bad amplitudes")
     return document
@@ -527,17 +526,61 @@ def verify_measurements(
 
 
 def write_semantic_report(statevectors: dict, measurements: dict) -> None:
-    """Persist successful semantic values for human inspection."""
+    """Persist successful semantic values in aligned, human-readable columns."""
+
+    def format_amplitude(pair) -> str:
+        return f"[{pair[0]:.3f}, {pair[1]:.3f}]"
 
     RESULTS.mkdir(parents=True, exist_ok=True)
-    report = {
-        "generated_at": datetime.now(timezone.utc).isoformat(),
-        "statevectors": statevectors,
-        "measurements": measurements,
-    }
-    SEMANTIC_REPORT.write_text(
-        json.dumps(report, indent=2, sort_keys=False) + "\n", encoding="utf-8"
-    )
+    lines = ["Semantic equivalence results", "=" * 80]
+
+    for case, report in statevectors.items():
+        amplitude_rows = [
+            (
+                basis,
+                format_amplitude(amplitudes["qrisp"]),
+                format_amplitude(amplitudes["static_qir"]),
+                format_amplitude(amplitudes["dynamic_qir"]),
+            )
+            for basis, amplitudes in report["amplitudes"].items()
+        ]
+        basis_width = max(len("basis"), *(len(row[0]) for row in amplitude_rows))
+        value_width = max(
+            len("Dynamic QIR"),
+            *(len(value) for row in amplitude_rows for value in row[1:]),
+        )
+        lines.extend(
+            [
+                "",
+                f"State vector: {case}",
+                f"  max |difference|: static={report['static_max_abs_difference']:.6g}, "
+                f"dynamic={report['dynamic_max_abs_difference']:.6g}",
+                f"  {'basis':<{basis_width}}  {'Qrisp':<{value_width}}  "
+                f"{'Static QIR':<{value_width}}  Dynamic QIR",
+                f"  {'-' * basis_width}  {'-' * value_width}  "
+                f"{'-' * value_width}  {'-' * value_width}",
+            ]
+        )
+        lines.extend(
+            f"  {basis:<{basis_width}}  {qrisp:<{value_width}}  "
+            f"{static:<{value_width}}  {dynamic}"
+            for basis, qrisp, static, dynamic in amplitude_rows
+        )
+
+    for case, report in measurements.items():
+        values = (report["qrisp"], report["static_qir"], report["dynamic_qir"])
+        value_width = max(len("Dynamic QIR"), *(len(value) for value in values))
+        lines.extend(
+            [
+                "",
+                f"Measurement: {case}",
+                f"  {'Qrisp':<{value_width}}  {'Static QIR':<{value_width}}  Dynamic QIR",
+                f"  {'-' * value_width}  {'-' * value_width}  {'-' * value_width}",
+                f"  {values[0]:<{value_width}}  {values[1]:<{value_width}}  {values[2]}",
+            ]
+        )
+
+    SEMANTIC_REPORT.write_text("\n".join(lines) + "\n", encoding="utf-8")
     print(f"PASS semantic results written to {SEMANTIC_REPORT.relative_to(ROOT)}")
 
 

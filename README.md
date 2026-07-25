@@ -58,11 +58,8 @@ The state-vector amplitudes and measurement bitstrings from the latest
 successful run are stored in:
 
 ```text
-tests/results/semantic_results.json
+tests/results/semantic_results.txt
 ```
-
-The report places Qrisp, static-QIR, and dynamic-QIR results together for
-visual comparison.
 
 When Qrisp test programs change, regenerate their checked-in MLIR fixtures with:
 

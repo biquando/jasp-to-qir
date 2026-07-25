@@ -47,7 +47,7 @@ import sys
 from typing import Any, Iterable
 
 
-FORMAT = "pg-statevector-v1"
+FORMAT = "jasp-to-qir-statevector-v1"
 
 
 def parse_json(value: str, expected_type: type, option: str) -> Any:
@@ -61,7 +61,7 @@ def parse_json(value: str, expected_type: type, option: str) -> Any:
 
 
 def load_program(path: Path):
-    module_name = f"_pg_qrisp_statevector_{abs(hash(path.resolve()))}"
+    module_name = f"_jasp-to-qir_qrisp_statevector_{abs(hash(path.resolve()))}"
     spec = importlib.util.spec_from_file_location(module_name, path)
     if spec is None or spec.loader is None:
         raise ValueError(f"cannot load Python program: {path}")

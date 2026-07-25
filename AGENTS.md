@@ -124,9 +124,9 @@ Use qir-runner to run a QIR file.
   tolerance. Do not weaken the tolerance or make semantic checks optional
   without a demonstrated numerical need.
 - A successful run writes the ignored human-readable report
-  `tests/results/semantic_results.json`, containing Qrisp, static-QIR, and
-  dynamic-QIR amplitudes or bitstrings side by side. Do not move retained
-  Selene build artifacts out of `tests/.tmp/`.
+  `tests/results/semantic_results.txt`, containing Qrisp, static-QIR, and
+  dynamic-QIR amplitudes or bitstrings side by side. Do not move retained Selene
+  build artifacts out of `tests/.tmp/`.
 - Run the full test script after pipeline changes. It validates each generated
   `.ll` file and also checks the intermediate-file option. With
   `--keep-intermediates`, the driver retains only `.llvm.mlir` and `.raw.ll`;
