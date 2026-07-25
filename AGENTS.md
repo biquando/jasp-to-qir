@@ -92,7 +92,7 @@ Use qir-runner to run a QIR file.
   requires fixed-size classical pointer buffers.
 - Record a measurement result immediately after its corresponding `mz` call;
   do not defer output recording to function exit. Output labels use the
-  `bit_<n>` form.
+  `result_<n>` form.
 - Lower Jasp `cx` to QIR `cnot`. Lower array reset through SCF so standard
   SCF-to-CF conversion preserves source control flow instead of unrolling it.
 - Unsupported quantum gates should produce a clear conversion error rather

@@ -121,7 +121,7 @@ Value llvmIntToPtr(OpBuilder &builder, Location location, int64_t id) {
       llvmConstant(builder, location, id));
 }
 
-/// Returns a pointer to a module-level `bit_<n>` output label, creating the
+/// Returns a pointer to a module-level `result_<n>` output label, creating the
 /// global string constant if necessary.
 Value outputLabel(OpBuilder &builder, Location location, int64_t index) {
   ModuleOp module =
@@ -132,7 +132,7 @@ Value outputLabel(OpBuilder &builder, Location location, int64_t index) {
 
   std::string name = (llvm::Twine("label") + llvm::Twine(index)).str();
   if (!module.lookupSymbol<LLVM::GlobalOp>(name)) {
-    std::string value = (llvm::Twine("bit_") + llvm::Twine(index)).str();
+    std::string value = (llvm::Twine("result_") + llvm::Twine(index)).str();
     value.push_back('\0');
     Type type = LLVM::LLVMArrayType::get(builder.getI8Type(), value.size());
     OpBuilder::InsertionGuard guard(builder);
