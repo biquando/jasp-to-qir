@@ -67,12 +67,11 @@ are not supported.
 Run a generated QIR file through qir-qis and Selene/QuEST for one shot:
 
 ```sh
-python tools/run_qir.py output.ll 5
+python tools/run_qir.py bell.ll 2
 ```
 
-The second argument is the simulator's qubit capacity; dynamic-resource QIR
-should use the maximum number of qubits it may allocate. Recorded QIR outputs
-are printed as `label: value` lines.
+The second argument is the simulator's qubit capacity. Recorded QIR outputs are
+printed as `label: value` lines.
 
 ## Testing
 
