@@ -5,7 +5,7 @@ Invoke this file with the repository virtual environment::
 
     ./venv/bin/python tests/run_tests.py
 
-The suite has five phases:
+The suite has seven phases:
 
 1. Regenerate Qrisp fixtures and compare them byte-for-byte with the checked-in
    files under ``tests/fixtures/qrisp``.
@@ -13,17 +13,25 @@ The suite has five phases:
    run the QIR and LLVM validators.
 3. Inspect representative LLVM output for semantic properties that structural
    validation alone cannot establish.
-4. Check diagnostics for invalid or unsupported Jasp input.
-5. Verify the driver's ``--keep-intermediates`` contract.
+4. Compare Qrisp and QIR state vectors for deterministic, unmeasured programs.
+5. Compare one-shot Qrisp and QIR outputs for deterministic measured programs.
+6. Check diagnostics for invalid or unsupported Jasp input.
+7. Verify the driver's ``--keep-intermediates`` contract.
 
-All generated files and caches live in a per-run directory beneath the ignored
-``tests/.tmp`` directory. The per-run directory is removed automatically. Set
-``LLVM_BIN`` to override the default Homebrew LLVM tool directory.
+Intermediate files and caches live in a per-run directory beneath the ignored
+``tests/.tmp`` directory and are removed automatically. Semantic comparison
+values are retained in ``tests/results/semantic_results.json`` for inspection.
+Set ``LLVM_BIN`` to override the default Homebrew LLVM tool directory.
 """
 
 from __future__ import annotations
 
 import os
+import contextlib
+from datetime import datetime, timezone
+import importlib.util
+import io
+import json
 import subprocess
 import sys
 import tempfile
@@ -38,11 +46,16 @@ FIXTURES = TESTS / "fixtures"
 QRISP = FIXTURES / "qrisp"
 INVALID = FIXTURES / "invalid"
 TEMP_ROOT = TESTS / ".tmp"
+RESULTS = TESTS / "results"
+SEMANTIC_REPORT = RESULTS / "semantic_results.json"
 DRIVER = ROOT / "tools/jasp_to_ll.py"
 VALIDATOR = ROOT / "tools/validate_qir.py"
 GENERATOR = TESTS / "generate_qrisp_fixtures.py"
+QRISP_STATEVECTOR = ROOT / "tools/qrisp_statevector.py"
+QIR_STATEVECTOR = ROOT / "tools/qir_statevector.py"
 LLVM_BIN = Path(os.environ.get("LLVM_BIN", "/opt/homebrew/opt/llvm/bin"))
 OPT = LLVM_BIN / "opt"
+STATEVECTOR_TOLERANCE = 1e-6
 
 
 class TestFailure(RuntimeError):
@@ -267,6 +280,267 @@ def verify_semantics(outputs: dict[tuple[str, str], Path], temp: Path) -> None:
     print("PASS focused QIR semantics")
 
 
+def load_qrisp_cases():
+    """Load the Qrisp source functions and semantic case metadata."""
+
+    spec = importlib.util.spec_from_file_location("qrisp_fixture_generator", GENERATOR)
+    require(spec is not None and spec.loader is not None, "cannot load fixture generator")
+    module = importlib.util.module_from_spec(spec)
+    with contextlib.redirect_stdout(io.StringIO()):
+        spec.loader.exec_module(module)
+    return module
+
+
+def load_statevector(path: Path) -> dict:
+    """Load and minimally validate a state-vector JSON document."""
+
+    try:
+        document = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise TestFailure(f"cannot read state vector {path}: {error}") from error
+    require(document.get("format") == "pg-statevector-v1", f"{path}: bad format")
+    require(isinstance(document.get("num_qubits"), int), f"{path}: bad qubit count")
+    require(isinstance(document.get("amplitudes"), list), f"{path}: bad amplitudes")
+    return document
+
+
+def compare_statevectors(expected: dict, actual: dict, case: str, mode: str) -> float:
+    """Compare two normalized dense vectors with a small numerical tolerance."""
+
+    require(
+        expected["num_qubits"] == actual["num_qubits"],
+        f"{case} ({mode}): qubit-count mismatch",
+    )
+    require(
+        expected.get("basis_order") == actual.get("basis_order"),
+        f"{case} ({mode}): basis-order mismatch",
+    )
+    expected_values = expected["amplitudes"]
+    actual_values = actual["amplitudes"]
+    require(
+        len(expected_values) == len(actual_values),
+        f"{case} ({mode}): state-vector length mismatch",
+    )
+    # Qrisp's simulator may use single-precision kernels for decomposed gates.
+    maximum_difference = 0.0
+    for index, (expected_pair, actual_pair) in enumerate(
+        zip(expected_values, actual_values)
+    ):
+        require(
+            len(expected_pair) == 2 and len(actual_pair) == 2,
+            f"{case} ({mode}): malformed amplitude {index}",
+        )
+        expected_value = complex(*expected_pair)
+        actual_value = complex(*actual_pair)
+        difference = abs(expected_value - actual_value)
+        maximum_difference = max(maximum_difference, difference)
+        allowed = STATEVECTOR_TOLERANCE + STATEVECTOR_TOLERANCE * abs(expected_value)
+        require(
+            difference <= allowed,
+            f"{case} ({mode}): amplitude {index} differs: "
+            f"Qrisp={expected_value}, QIR={actual_value}",
+        )
+    return maximum_difference
+
+
+def amplitudes_by_basis(document: dict) -> dict[str, list[float]]:
+    """Label dense amplitudes with their computational-basis strings."""
+
+    width = document["num_qubits"]
+    return {
+        format(index, f"0{width}b"): pair
+        for index, pair in enumerate(document["amplitudes"])
+    }
+
+
+def verify_statevectors(
+    outputs: dict[tuple[str, str], Path], cases, temp: Path
+) -> dict:
+    """Compare Qrisp and Selene/QuEST vectors in both resource modes."""
+
+    comparisons = 0
+    report = {}
+    for fixture_name, case in cases.items():
+        function_name = case["function"].__name__
+        qrisp_output = temp / f"{Path(fixture_name).stem}.qrisp-state.json"
+        run(
+            [
+                sys.executable,
+                QRISP_STATEVECTOR,
+                GENERATOR,
+                "--function",
+                function_name,
+                "--output",
+                qrisp_output,
+            ]
+        )
+        expected = load_statevector(qrisp_output)
+        require(
+            expected["num_qubits"] == case["qubits"],
+            f"{fixture_name}: Qrisp returned an unexpected qubit count",
+        )
+        case_report = {
+            "num_qubits": expected["num_qubits"],
+            "basis_order": expected["basis_order"],
+            "tolerance": STATEVECTOR_TOLERANCE,
+        }
+        amplitudes = {"qrisp": amplitudes_by_basis(expected)}
+
+        for mode in ("static", "dynamic"):
+            qir_output = temp / f"{Path(fixture_name).stem}.{mode}.qir-state.json"
+            command: list[str | Path] = [
+                sys.executable,
+                QIR_STATEVECTOR,
+                outputs[(mode, fixture_name)],
+                "--seed",
+                "7",
+                "--output",
+                qir_output,
+            ]
+            if mode == "dynamic":
+                command.extend(["--n-qubits", str(case["qubits"])])
+            run(command)
+            actual = load_statevector(qir_output)
+            maximum_difference = compare_statevectors(
+                expected, actual, fixture_name, mode
+            )
+            amplitudes[f"{mode}_qir"] = amplitudes_by_basis(actual)
+            case_report[f"{mode}_max_abs_difference"] = maximum_difference
+            comparisons += 1
+        case_report["amplitudes"] = {
+            basis: {
+                source: values[basis]
+                for source, values in amplitudes.items()
+            }
+            for basis in amplitudes["qrisp"]
+        }
+        report[Path(fixture_name).stem] = case_report
+    print(f"PASS state-vector equivalence ({comparisons} comparisons)")
+    return report
+
+
+def flatten_tree(value) -> list:
+    """Flatten tuple/list result structure while retaining scalar leaves."""
+
+    if isinstance(value, (tuple, list)):
+        flattened = []
+        for item in value:
+            flattened.extend(flatten_tree(item))
+        return flattened
+    return [value]
+
+
+def qrisp_result_bits(result, widths: tuple[int, ...], case: str) -> list[int]:
+    """Expand Qrisp result leaves into QubitArray least-significant-bit order."""
+
+    leaves = flatten_tree(result)
+    require(
+        len(leaves) == len(widths),
+        f"{case}: expected {len(widths)} Qrisp result leaves, got {len(leaves)}",
+    )
+    bits = []
+    for value, width in zip(leaves, widths):
+        integer = int(value)
+        require(0 <= integer < 1 << width, f"{case}: result {integer} exceeds width {width}")
+        bits.extend((integer >> index) & 1 for index in range(width))
+    return bits
+
+
+def selene_result_bits(entries, case: str, mode: str) -> list[int]:
+    """Flatten Selene scalar and result-array records in emission order."""
+
+    bits = []
+    for _, value in entries:
+        for item in flatten_tree(value):
+            bit = int(item)
+            require(bit in (0, 1), f"{case} ({mode}): non-bit Selene result {item}")
+            bits.append(bit)
+    return bits
+
+
+def verify_measurements(
+    outputs: dict[tuple[str, str], Path], cases, temp: Path
+) -> dict:
+    """Compare deterministic one-shot Qrisp and Selene measurement results."""
+
+    try:
+        from qrisp.jasp import jaspify
+        from selene_sim import Quest, build
+    except ImportError as error:
+        raise TestFailure(f"measurement test dependency is unavailable: {error}") from error
+
+    comparisons = 0
+    report = {}
+    cache_key = "ZIG_GLOBAL_CACHE_DIR"
+    previous_cache = os.environ.get(cache_key)
+    os.environ[cache_key] = str(temp / "zig-global-cache")
+    try:
+        for fixture_name, case in cases.items():
+            with contextlib.redirect_stdout(io.StringIO()):
+                qrisp_result = jaspify(case["function"])()
+            expected = list(case["expected"])
+            qrisp_bits = qrisp_result_bits(
+                qrisp_result, tuple(case["widths"]), fixture_name
+            )
+            require(
+                qrisp_bits == expected,
+                f"{fixture_name}: Qrisp produced {qrisp_bits}, expected {expected}",
+            )
+            case_report = {
+                "bit_order": "measurement emission order; QubitArray values are least-significant-bit first",
+                "expected": "".join(str(bit) for bit in expected),
+                "qrisp": "".join(str(bit) for bit in qrisp_bits),
+            }
+
+            for mode in ("static", "dynamic"):
+                build_dir = temp / f"selene-{Path(fixture_name).stem}-{mode}"
+                try:
+                    runner = build(outputs[(mode, fixture_name)], build_dir=build_dir)
+                    entries = list(
+                        runner.run(
+                            simulator=Quest(random_seed=7),
+                            n_qubits=case["qubits"],
+                        )
+                    )
+                except Exception as error:
+                    raise TestFailure(
+                        f"{fixture_name} ({mode}): Selene execution failed: {error}"
+                    ) from error
+                qir_bits = selene_result_bits(entries, fixture_name, mode)
+                require(
+                    qir_bits == expected,
+                    f"{fixture_name} ({mode}): QIR produced {qir_bits}, "
+                    f"expected {expected} and Qrisp produced {qrisp_bits}",
+                )
+                case_report[f"{mode}_qir"] = "".join(
+                    str(bit) for bit in qir_bits
+                )
+                comparisons += 1
+            report[Path(fixture_name).stem] = case_report
+    finally:
+        if previous_cache is None:
+            os.environ.pop(cache_key, None)
+        else:
+            os.environ[cache_key] = previous_cache
+    print(f"PASS deterministic measurement equivalence ({comparisons} comparisons)")
+    return report
+
+
+def write_semantic_report(statevectors: dict, measurements: dict) -> None:
+    """Persist successful semantic values for human inspection."""
+
+    RESULTS.mkdir(parents=True, exist_ok=True)
+    report = {
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "statevectors": statevectors,
+        "measurements": measurements,
+    }
+    SEMANTIC_REPORT.write_text(
+        json.dumps(report, indent=2, sort_keys=False) + "\n", encoding="utf-8"
+    )
+    print(f"PASS semantic results written to {SEMANTIC_REPORT.relative_to(ROOT)}")
+
+
 def expect_conversion_failure(
     fixture: Path,
     expected: str,
@@ -344,6 +618,29 @@ def main() -> int:
             verify_qrisp_fixtures(temp)
             outputs = verify_valid_fixtures(temp)
             verify_semantics(outputs, temp)
+            cache_environment = {
+                "MPLCONFIGDIR": str(temp / "semantic-cache" / "matplotlib"),
+                "XDG_CACHE_HOME": str(temp / "semantic-cache"),
+            }
+            previous_cache = {
+                key: os.environ.get(key) for key in cache_environment
+            }
+            os.environ.update(cache_environment)
+            try:
+                cases = load_qrisp_cases()
+                statevector_report = verify_statevectors(
+                    outputs, cases.STATEVECTOR_CASES, temp
+                )
+                measurement_report = verify_measurements(
+                    outputs, cases.MEASUREMENT_CASES, temp
+                )
+                write_semantic_report(statevector_report, measurement_report)
+            finally:
+                for key, value in previous_cache.items():
+                    if value is None:
+                        os.environ.pop(key, None)
+                    else:
+                        os.environ[key] = value
             verify_invalid_fixtures(temp)
             verify_intermediates(temp)
     except (OSError, TestFailure) as error:

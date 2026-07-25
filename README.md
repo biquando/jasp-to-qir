@@ -122,8 +122,29 @@ Run the complete suite with:
 
 The runner regenerates Qrisp fixtures into ignored `tests/.tmp/` storage,
 compares them with the checked-in copies, converts every valid fixture in
-static and dynamic resource modes, validates the resulting QIR, and checks
-expected failures.
+static and dynamic resource modes, validates the resulting QIR, checks
+expected failures, and runs semantic equivalence checks with Qrisp and
+Selene/QuEST.
+
+The semantic checks have two categories:
+
+- State-vector tests contain no measurements or resets. The same Qrisp source
+  program is simulated with Qrisp and converted to static and dynamic QIR,
+  which Selene executes with the QuEST state-vector simulator. Dense amplitudes
+  are compared after normalizing global phase, using a `1e-6` tolerance for
+  Qrisp's single-precision gate kernels.
+- Measurement tests may contain reset and measurement-controlled gates, but
+  must have exactly one possible output bitstring. One Qrisp shot and one
+  Selene shot for each resource mode must all equal the independently declared
+  expected bitstring. Qubit-array results are compared least-significant-bit
+  first, matching Qrisp's packed integer representation.
+
+Successful semantic values are retained for visual inspection in
+`tests/results/semantic_results.json`. For every computational basis state,
+the report places the Qrisp, static-QIR, and dynamic-QIR amplitudes together
+and records each mode's maximum absolute difference. Measurement entries show
+the expected and three observed bitstrings side by side. The report is
+regenerated on every suite run and ignored by Git.
 
 Fixtures are organized by purpose:
 
@@ -137,9 +158,21 @@ Regenerate the checked-in Qrisp fixtures with:
 ./venv/bin/python tests/generate_qrisp_fixtures.py
 ```
 
-Use `--output-dir <path>` to generate them elsewhere. Test outputs, temporary
-fixture generations, and Matplotlib caches remain under `tests/.tmp/`, and each
-per-run directory is removed automatically.
+Use `--output-dir <path>` to generate them elsewhere. Intermediate QIR, fixture
+generations, Selene builds, and caches remain under `tests/.tmp/`, and each
+per-run directory is removed automatically. Only the ignored semantic report
+under `tests/results/` is retained.
+
+The standalone state-vector tools used by the suite can also be invoked
+directly:
+
+```sh
+./venv/bin/python tools/qrisp_statevector.py program.py -o qrisp-state.json
+./venv/bin/python tools/qir_statevector.py program.ll -o qir-state.json
+```
+
+Dynamic QIR does not declare a fixed capacity, so pass its simulator capacity
+with `--n-qubits <count>` to `qir_statevector.py`.
 
 Control flow is not matched or synthesized by the Python driver. Any SCF
 operation supported by MLIR's standard SCF-to-CF conversion follows the same

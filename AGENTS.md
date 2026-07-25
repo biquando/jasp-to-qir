@@ -27,8 +27,12 @@ QIR.
 - `tools/jasp_to_ll.py` runs the full pipeline, emits LLVM IR, and adds required
   QIR declarations, module flags, entry-point attributes, and result recording.
 - `tools/validate_qir.py` validates emitted QIR.
+- `tools/qrisp_statevector.py` emits normalized state-vector JSON from an
+  unmeasured Qrisp source program; `tools/qir_statevector.py` emits the same
+  format by running QIR with Selene/QuEST.
 - `tests/generate_qrisp_fixtures.py` generates Jasp fixtures with Qrisp;
-  `tests/run_tests.py` regenerates them and runs the test suite.
+  `tests/run_tests.py` regenerates them, runs structural regressions, and
+  compares Qrisp behavior with static and dynamic QIR.
 
 ## Common commands
 
@@ -89,6 +93,24 @@ Use qir-runner to run a QIR file.
   and fails if checked-in fixtures are stale.
 - Add regression checks to `tests/run_tests.py` for every semantic bug fixed,
   including expected failures for unsupported operations.
+- State-vector equivalence fixtures must not measure or reset. Return their
+  live quantum values so Qrisp and Selene/QuEST can compare normalized dense
+  vectors in both static and dynamic modes. Register them in
+  `STATEVECTOR_CASES` with the simulator qubit capacity.
+- Measurement equivalence fixtures may use reset, mid-circuit measurement, and
+  measurement-controlled gates, but every explicit measurement outcome must be
+  deterministic and represented in the returned value. Register result widths
+  and an independently known expected bitstring in `MEASUREMENT_CASES`;
+  QubitArray integers expand least-significant-bit first.
+- The semantic suite uses `selene-sim`/QuEST for QIR execution because
+  qir-runner does not link the dynamic array runtime APIs. Cross-simulator
+  state vectors are compared after global-phase normalization with a `1e-6`
+  tolerance. Do not weaken the tolerance or make semantic checks optional
+  without a demonstrated numerical need.
+- A successful run writes the ignored human-readable report
+  `tests/results/semantic_results.json`, containing Qrisp, static-QIR, and
+  dynamic-QIR amplitudes or bitstrings side by side. Do not move retained
+  Selene build artifacts out of `tests/.tmp/`.
 - Run the full test script after pipeline changes. It validates each generated
   `.ll` file and also checks the intermediate-file option. With
   `--keep-intermediates`, the driver retains only `.llvm.mlir` and `.raw.ll`;

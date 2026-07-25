@@ -209,6 +209,104 @@ def measurement_feedback_loop():
     return total, measure(register)
 
 
+def statevector_bell():
+    register = QuantumVariable(2)
+    h(register[0])
+    cx(register[0], register[1])
+    return register
+
+
+def statevector_broad_gates():
+    register = QuantumVariable(4)
+
+    h(register[0])
+    h(register[1])
+    x(register[2])
+    y(register[3])
+    z(register[0])
+    s(register[0])
+    s_dg(register[1])
+    t(register[2])
+    t_dg(register[3])
+    rx(0.125, register[0])
+    ry(-0.25, register[1])
+    rz(0.5, register[2])
+    cx(register[0], register[2])
+    cz(register[1], register[3])
+    mcx([register[0], register[1]], register[3], method="gray")
+    return register
+
+
+def statevector_multiple_arrays():
+    data = QuantumVariable(3)
+    ancilla = QuantumVariable(2)
+    target = QuantumVariable(1)
+
+    h(data[0])
+    rx(0.375, data[1])
+    for index in jrange(2):
+        cx(data[index], ancilla[index])
+        ry(0.25, ancilla[index])
+    cz(ancilla[1], target[0])
+    return data, ancilla, target
+
+
+def statevector_tfim():
+    register = QuantumVariable(4)
+    for _ in jrange(3):
+        for index in range(3):
+            cx(register[index], register[index + 1])
+            rz(0.4, register[index + 1])
+            cx(register[index], register[index + 1])
+        for index in range(4):
+            rx(0.2, register[index])
+    return register
+
+
+def measurement_basis_array():
+    register = QuantumVariable(4)
+    x(register[0])
+    y(register[2])
+    return measure(register)
+
+
+def measurement_feedback():
+    data = QuantumVariable(2)
+    controls = QuantumVariable(2)
+    x(controls[0])
+    true_result = measure(controls[0])
+    false_result = measure(controls[1])
+
+    def set_first(register):
+        x(register[0])
+        return register
+
+    def phase_first(register):
+        z(register[0])
+        return register
+
+    data = q_cond(true_result, set_first, phase_first, data)
+
+    def phase_second(register):
+        z(register[1])
+        return register
+
+    def set_second(register):
+        x(register[1])
+        return register
+
+    data = q_cond(false_result, phase_second, set_second, data)
+    return true_result, false_result, measure(data)
+
+
+def measurement_reset():
+    register = QuantumVariable(2)
+    h(register[0])
+    reset(register[0])
+    x(register[1])
+    return measure(register)
+
+
 def write_fixture(function, output: Path) -> None:
     jaspr = make_jaspr(function)()
     assert type(jaspr) == Jaspr
@@ -232,6 +330,56 @@ FIXTURES = {
     "broad_gates.mlir": broad_gate_set,
     "measurement_feedback_loop.mlir": measurement_feedback_loop,
 }
+
+
+STATEVECTOR_CASES = {
+    "statevector_bell.mlir": {
+        "function": statevector_bell,
+        "qubits": 2,
+    },
+    "statevector_broad_gates.mlir": {
+        "function": statevector_broad_gates,
+        "qubits": 4,
+    },
+    "statevector_multiple_arrays.mlir": {
+        "function": statevector_multiple_arrays,
+        "qubits": 6,
+    },
+    "statevector_tfim.mlir": {
+        "function": statevector_tfim,
+        "qubits": 4,
+    },
+}
+
+
+MEASUREMENT_CASES = {
+    "measurement_basis_array.mlir": {
+        "function": measurement_basis_array,
+        "qubits": 4,
+        "widths": (4,),
+        "expected": (1, 0, 1, 0),
+    },
+    "measurement_feedback.mlir": {
+        "function": measurement_feedback,
+        "qubits": 4,
+        "widths": (1, 1, 2),
+        "expected": (1, 0, 1, 1),
+    },
+    "measurement_reset.mlir": {
+        "function": measurement_reset,
+        "qubits": 2,
+        "widths": (2,),
+        "expected": (0, 1),
+    },
+}
+
+
+FIXTURES.update(
+    {
+        name: case["function"]
+        for name, case in (*STATEVECTOR_CASES.items(), *MEASUREMENT_CASES.items())
+    }
+)
 
 
 def main() -> None:
