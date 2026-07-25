@@ -19,6 +19,7 @@ __pycache__/
 .mypy_cache/
 .ruff_cache/
 .cache/
+/tests/.tmp/
 
 # Generated QIR and conversion intermediates
 *.ll

@@ -28,7 +28,7 @@ QIR.
   QIR declarations, module flags, entry-point attributes, and result recording.
 - `tools/validate_qir.py` validates emitted QIR.
 - `tests/generate_qrisp_fixtures.py` generates Jasp fixtures with Qrisp;
-  `tests/run_tests.sh` regenerates them and runs the test suite.
+  `tests/run_tests.py` regenerates them and runs the test suite.
 
 ## Common commands
 
@@ -51,7 +51,7 @@ python3 tools/jasp_to_ll.py input.mlir output.ll
 Set `LLVM_BIN` if LLVM tools are not on `PATH`. Run all regressions with:
 
 ```sh
-./tests/run_tests.sh
+./venv/bin/python tests/run_tests.py
 ```
 
 Use qir-runner to run a QIR file.
@@ -84,9 +84,10 @@ Use qir-runner to run a QIR file.
 ## Tests and fixtures
 
 - Add or modify Qrisp-based coverage in `tests/generate_qrisp_fixtures.py`,
-  then regenerate the checked-in `qrisp_*.mlir` fixtures. If Matplotlib creates
-  cache warnings, run the generator with `MPLCONFIGDIR=/tmp/qrisp-mpl`.
-- Add regression checks to `tests/run_tests.sh` for every semantic bug fixed,
+  then regenerate the checked-in fixtures under `tests/fixtures/qrisp/`. The
+  test runner regenerates into `tests/.tmp/` with isolated cache directories
+  and fails if checked-in fixtures are stale.
+- Add regression checks to `tests/run_tests.py` for every semantic bug fixed,
   including expected failures for unsupported operations.
 - Run the full test script after pipeline changes. It validates each generated
   `.ll` file and also checks the intermediate-file option. With

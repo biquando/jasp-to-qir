@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Generate representative Jasp MLIR fixtures with Qrisp."""
 
+import argparse
 from pathlib import Path
 
 from qrisp import (
@@ -144,23 +145,36 @@ def measurement_feedback_loop():
 def write_fixture(function, output: Path) -> None:
     jaspr = make_jaspr(function)()
     assert type(jaspr) == Jaspr
-    output.write_text(str(jaspr.to_mlir(lower_stablehlo=True)), encoding="utf-8")
+    mlir = str(jaspr.to_mlir(lower_stablehlo=True))
+    output.write_text(mlir.rstrip() + "\n", encoding="utf-8")
+
+
+FIXTURES = {
+    "adaptive.mlir": adaptive,
+    "broad_gates.mlir": broad_gate_set,
+    "conditional_measurement.mlir": conditional_measurement,
+    "loop.mlir": loop,
+    "many_results.mlir": many_results,
+    "measurement_feedback_loop.mlir": measurement_feedback_loop,
+    "reset.mlir": reset_chain,
+    "reset_array.mlir": reset_array,
+    "rotations.mlir": rotations,
+}
 
 
 def main() -> None:
-    root = Path(__file__).resolve().parent
-    for name, function in {
-        "qrisp_rotations.mlir": rotations,
-        "qrisp_adaptive.mlir": adaptive,
-        "qrisp_loop.mlir": loop,
-        "qrisp_reset.mlir": reset_chain,
-        "qrisp_reset_array.mlir": reset_array,
-        "qrisp_many_results.mlir": many_results,
-        "qrisp_conditional_measurement.mlir": conditional_measurement,
-        "qrisp_broad_gate_set.mlir": broad_gate_set,
-        "qrisp_measurement_feedback_loop.mlir": measurement_feedback_loop,
-    }.items():
-        write_fixture(function, root / name)
+    default_output = Path(__file__).resolve().parent / "fixtures/qrisp"
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--output-dir",
+        type=Path,
+        default=default_output,
+        help=f"fixture destination (default: {default_output})",
+    )
+    args = parser.parse_args()
+    args.output_dir.mkdir(parents=True, exist_ok=True)
+    for name, function in FIXTURES.items():
+        write_fixture(function, args.output_dir / name)
 
 
 if __name__ == "__main__":
