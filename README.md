@@ -6,19 +6,16 @@ to QIR 2.1 LLVM IR for the Adaptive Profile.
 
 ## Pipeline
 
-The conversion has three deliberately small stages:
+The conversion has two stages:
 
-1. `tools/jasp_to_generic.py` repairs arbitrary producer line wrapping,
-   rewrites Jasp custom assembly into generic MLIR, scalarizes rank-0 tensors,
-   and replaces Jasp-only handle types with LLVM-legal scalar types.
-2. `build/jasp-to-qir`, built from `tools/jasp-to-qir.cpp` and
-   `lib/JaspToQIR.cpp`, validates and lowers Jasp quantum operations, maps
-   gates to QIR, and reports the static resources and profile capabilities
-   required by the module.
-3. `tools/jasp_to_ll.py` runs MLIR's standard `convert-scf-to-cf`,
-   `convert-cf-to-llvm`, `convert-arith-to-llvm`, and `convert-func-to-llvm`
-   passes, translates LLVM dialect to LLVM IR, and renders the QIR declarations,
-   entry-point instrumentation, and metadata that MLIR cannot represent.
+1. `build/jasp-to-qir` parses the generated Jasp dialect, verifies and lowers
+   typed Jasp operations, scalarizes Qrisp's rank-zero tensor wrappers, and
+   runs MLIR's standard SCF, CF, arith, and func conversions. The checked-in
+   TableGen definitions under `include/Jasp/IR` are derived from Qrisp and do
+   not require a Qrisp checkout at build or runtime.
+2. `tools/jasp_to_ll.py` translates the resulting LLVM dialect to LLVM IR and
+   renders the QIR declarations, entry-point instrumentation, result records,
+   and profile metadata that MLIR cannot represent.
 
 The final QIR uses standard `__quantum__qis__*__body` calls, output-recording
 runtime calls, entry-point attributes, and QIR module flags. Controlled-X is
@@ -63,10 +60,11 @@ python3 tools/jasp_to_ll.py --keep-intermediates input.mlir output.ll
 
 When kept, the driver writes these files next to the output:
 
-- `output.generic.mlir`: generic, scalarized Jasp MLIR
-- `output.qir.mlir`: Jasp operations lowered
 - `output.llvm.mlir`: standard CF/arith/func-to-LLVM output
 - `output.raw.ll`: direct `mlir-translate` output before QIR profile metadata
+
+Inputs must be syntactically valid MLIR; the generated dialect accepts Qrisp's
+custom Jasp assembly directly.
 
 ## Validate
 
@@ -82,6 +80,11 @@ For additional LLVM structural checks:
 ```sh
 /opt/homebrew/opt/llvm/bin/llvm-as output.ll -o /dev/null
 /opt/homebrew/opt/llvm/bin/opt -passes=verify -disable-output output.ll
+```
+
+To run a generated QIR program, use qir-runner:
+```sh
+./venv/bin/qir-runner -f <QIR file> -s <shots>
 ```
 
 ## Test

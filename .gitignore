@@ -22,8 +22,6 @@ __pycache__/
 
 # Generated QIR and conversion intermediates
 *.ll
-*.generic.mlir
-*.qir.mlir
 *.llvm.mlir
 *.raw.ll
 
@@ -37,3 +35,6 @@ htmlcov/
 .vscode/
 *.swp
 *.swo
+
+# Qrisp repo
+/Qrisp/

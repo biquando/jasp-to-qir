@@ -8,13 +8,9 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
-from jasp_to_generic import convert as convert_to_generic
-
-
 ROOT = Path(__file__).resolve().parent.parent
 JASP_OPT = ROOT / "build/jasp-to-qir"
 LLVM_BIN = Path(os.environ.get("LLVM_BIN", "/opt/homebrew/opt/llvm/bin"))
-MLIR_OPT = LLVM_BIN / "mlir-opt"
 MLIR_TRANSLATE = LLVM_BIN / "mlir-translate"
 
 
@@ -193,19 +189,15 @@ attributes #1 = {{ "irreversible" }}
 
 def convert(input_path: Path, output_path: Path, keep_intermediates: bool = False) -> None:
     stem = output_path.with_suffix("")
-    generic = stem.with_suffix(".generic.mlir")
-    jasp = stem.with_suffix(".qir.mlir")
     llvm = stem.with_suffix(".llvm.mlir")
     raw_llvm = stem.with_suffix(".raw.ll")
 
-    intermediates = (generic, jasp, llvm, raw_llvm)
+    intermediates = (llvm, raw_llvm)
     try:
-        convert_to_generic(input_path, generic)
-        run(JASP_OPT, generic, "--lower-jasp-to-qir", "-o", jasp)
-        profile = read_profile(jasp.read_text(encoding="utf-8"))
         run(
-            MLIR_OPT,
-            jasp,
+            JASP_OPT,
+            input_path,
+            "--lower-jasp-to-qir",
             "--canonicalize",
             "--convert-scf-to-cf",
             "--convert-cf-to-llvm",
@@ -215,6 +207,7 @@ def convert(input_path: Path, output_path: Path, keep_intermediates: bool = Fals
             "-o",
             llvm,
         )
+        profile = read_profile(llvm.read_text(encoding="utf-8"))
         run(MLIR_TRANSLATE, "--mlir-to-llvmir", llvm, "-o", raw_llvm)
 
         raw = raw_llvm.read_text(encoding="utf-8")
