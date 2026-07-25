@@ -13,6 +13,7 @@
 
 # Python environments, caches, and test tooling
 /venv/
+/.venv/
 __pycache__/
 *.py[cod]
 .pytest_cache/

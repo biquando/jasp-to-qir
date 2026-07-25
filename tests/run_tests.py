@@ -527,7 +527,7 @@ def write_semantic_report(statevectors: dict, measurements: dict) -> None:
     """Persist successful semantic values in aligned, human-readable columns."""
 
     def format_amplitude(pair) -> str:
-        return f"[{pair[0]:.3f}, {pair[1]:.3f}]"
+        return f"[{pair[0]: .7f}, {pair[1]: .7f}]"
 
     RESULTS.mkdir(parents=True, exist_ok=True)
     lines = ["Semantic equivalence results", "=" * 80]

@@ -107,7 +107,7 @@ def module_flags(profile: QirProfile) -> str:
     dynamic = str(profile.resource_management == "dynamic").lower()
     return f"""!llvm.module.flags = !{{!0, !1, !2, !3, !4, !5, !6, !7, !8, !9, !10}}
 !0 = !{{i32 1, !"qir_major_version", i32 2}}
-!1 = !{{i32 7, !"qir_minor_version", i32 0}}
+!1 = !{{i32 7, !"qir_minor_version", i32 1}}
 !2 = !{{i32 1, !"dynamic_qubit_management", i1 {dynamic}}}
 !3 = !{{i32 1, !"dynamic_result_management", i1 {dynamic}}}
 !4 = !{{i32 1, !"ir_functions", i1 {str(profile.ir_functions).lower()}}}
