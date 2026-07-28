@@ -27,7 +27,10 @@ target_include_directories(JaspDialect PUBLIC
 )
 target_link_libraries(JaspDialect PUBLIC MLIRIR)
 
-add_library(JaspToQIRPass STATIC lib/JaspToQIR.cpp)
+add_library(JaspToQIRPass STATIC
+  lib/FinalizeQIRLLVM.cpp
+  lib/JaspToQIR.cpp
+)
 add_dependencies(JaspToQIRPass JaspOpsIncGen)
 target_include_directories(JaspToQIRPass PUBLIC
   ${CMAKE_CURRENT_SOURCE_DIR}/include

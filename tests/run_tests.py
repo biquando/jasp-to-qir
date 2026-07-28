@@ -210,7 +210,7 @@ def verify_semantics(outputs: dict[tuple[str, str], Path], temp: Path) -> None:
 
     require_contains(outputs[("static", "adaptive.mlir")], "br i1")
     require_contains(
-        outputs[("static", "loop.mlir")], '!"backwards_branching", i2 1'
+        outputs[("static", "loop.mlir")], '!"backwards_branching", i2 3'
     )
     require_contains(
         outputs[("static", "many_results.mlir")],
@@ -218,7 +218,8 @@ def verify_semantics(outputs: dict[tuple[str, str], Path], temp: Path) -> None:
     )
     reset = require_contains(
         outputs[("static", "reset_array.mlir")],
-        "declare void @__quantum__qis__reset__body(ptr) #1",
+        "declare void @__quantum__qis__reset__body(ptr) #",
+        '"irreversible"',
     )
     require(
         "__quantum__qis__reset__body({" not in reset,
@@ -631,7 +632,7 @@ def verify_invalid_fixtures(temp: Path) -> None:
 
 
 def verify_intermediates(temp: Path) -> None:
-    """Verify the documented intermediate files are retained."""
+    """Verify retained files and LLVM-dialect QIR finalization."""
 
     output = temp / "kept.ll"
     run(
@@ -646,6 +647,24 @@ def verify_intermediates(temp: Path) -> None:
     stem = output.with_suffix("")
     for suffix in ("llvm.mlir", "raw.ll"):
         require(stem.with_suffix(f".{suffix}").is_file(), f"missing kept {suffix}")
+    llvm_mlir = require_contains(
+        stem.with_suffix(".llvm.mlir"),
+        "llvm.call @__quantum__rt__initialize",
+        'passthrough = ["entry_point"',
+        '["required_num_qubits", "2"]',
+        "!llvm.ptr {llvm.writeonly}",
+        "!llvm.ptr {llvm.readonly}",
+        'passthrough = ["irreversible"]',
+    )
+    require(
+        llvm_mlir.count("llvm.call @__quantum__rt__initialize") == 1,
+        "LLVM-dialect main was not initialized exactly once",
+    )
+    raw = stem.with_suffix(".raw.ll").read_text(encoding="utf-8")
+    require(
+        raw.count("call void @__quantum__rt__initialize(ptr null)") == 1,
+        "raw LLVM main was not initialized exactly once",
+    )
     print("PASS --keep-intermediates")
 
 

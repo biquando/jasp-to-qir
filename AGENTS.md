@@ -20,12 +20,14 @@ QIR.
 - `lib/JaspOps.cpp` registers the generated dialect and implements its local
   semantic verifiers.
 - `lib/JaspToQIR.cpp` contains the typed Jasp lowering and rank-zero tensor
-  scalarization. It uses standard Func and SCF type-conversion patterns so
-  Jasp values can flow through calls and structured control flow.
+  scalarization. It uses standard Func and SCF type-conversion patterns so Jasp
+  values can flow through calls and structured control flow.
+- `lib/FinalizeQIRLLVM.cpp` adds QIR declarations, function attributes, and
+  entry-point initialization to the fully converted LLVM-dialect module.
 - `tools/jasp-to-qir.cpp` registers the generated dialect, the custom pass,
   and standard MLIR passes for `mlir-opt`.
-- `tools/jasp_to_ll.py` runs the full pipeline, emits LLVM IR, and adds required
-  QIR declarations, module flags, entry-point attributes, and result recording.
+- `tools/jasp_to_ll.py` runs the full pipeline, invokes `mlir-translate`, and
+  replaces translator metadata with the required QIR module flags.
 - `tools/validate_qir.py` validates emitted QIR.
 - `tools/qrisp_statevector.py` emits normalized state-vector JSON from an
   unmeasured Qrisp source program; `tools/qir_statevector.py` emits the same

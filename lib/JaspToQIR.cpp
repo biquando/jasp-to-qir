@@ -225,16 +225,22 @@ Value measureStaticQubit(OpBuilder &builder, Location location, Value qubit,
       .getResult();
 }
 
+/// Used for jasp.create_quantum_kernel and jasp.consume_quantum_kernel. These
+/// functions create/delete a quantum state, but QIR does not use represent the
+/// quantum state explicitly, instead relying on function side effects. Thus
+/// this function converts the quantum state into just the boolean "true".
 template <typename OpTy> struct PassState final : OpConversionPattern<OpTy> {
   using OpConversionPattern<OpTy>::OpConversionPattern;
-  LogicalResult
-  matchAndRewrite(OpTy op, typename OpTy::Adaptor adaptor,
-                  ConversionPatternRewriter &rewriter) const override {
+  LogicalResult matchAndRewrite(OpTy op, typename OpTy::Adaptor adaptor,
+                                ConversionPatternRewriter &rewriter) const override {
     Value state = adaptor.getOperands().empty()
-                      ? arith::ConstantOp::create(rewriter, op.getLoc(),
-                                                  rewriter.getBoolAttr(true))
-                            .getResult()
+
+                      // jasp.create_quantum_kernel
+                      ? arith::ConstantOp::create(rewriter, op.getLoc(), rewriter.getBoolAttr(true)).getResult()
+
+                      // jasp.consume_quantum_kernel
                       : adaptor.getOperands().back();
+
     rewriter.replaceOp(op, state);
     return success();
   }
@@ -257,7 +263,7 @@ struct LowerCreateQubits final : OpConversionPattern<jasp_ir::CreateQubitsOp> {
     Value base;
     if (dynamic) {
       Type pointerType = LLVM::LLVMPointerType::get(rewriter.getContext());
-      int64_t count = op->getAttrOfType<IntegerAttr>("qir.count").getInt();
+      int64_t count = op->getAttrOfType<IntegerAttr>("metadata.count").getInt();
       base = fixedPointerBuffer(rewriter, op.getLoc(), count);
       Value null = LLVM::ZeroOp::create(rewriter, op.getLoc(), pointerType);
       emitRuntimeCall(rewriter, op.getLoc(),
@@ -266,7 +272,7 @@ struct LowerCreateQubits final : OpConversionPattern<jasp_ir::CreateQubitsOp> {
     } else {
       base = llvmConstant(
           rewriter, op.getLoc(),
-          op->getAttrOfType<IntegerAttr>("qir.base").getInt());
+          op->getAttrOfType<IntegerAttr>("metadata.base").getInt());
     }
 
     // Insert qubit array base index at the struct's index 0
@@ -424,11 +430,10 @@ struct LowerGate final : OpConversionPattern<jasp_ir::QuantumGateOp> {
 struct LowerMeasure final : OpConversionPattern<jasp_ir::MeasureOp> {
   LowerMeasure(TypeConverter &converter, MLIRContext *context, bool dynamic)
       : OpConversionPattern(converter, context), dynamic(dynamic) {}
-  LogicalResult
-  matchAndRewrite(jasp_ir::MeasureOp op, OpAdaptor adaptor,
-                  ConversionPatternRewriter &rewriter) const override {
+  LogicalResult matchAndRewrite(jasp_ir::MeasureOp op, OpAdaptor adaptor,
+                                ConversionPatternRewriter &rewriter) const override {
     int64_t resultBase =
-        op->getAttrOfType<IntegerAttr>("qir.result_base").getInt();
+        op->getAttrOfType<IntegerAttr>("metadata.result_base").getInt();
     Value qubits = adaptor.getMeasQ();
     if (isa<LLVM::LLVMPointerType>(qubits.getType())) {
       Value bit;
@@ -470,7 +475,7 @@ struct LowerMeasure final : OpConversionPattern<jasp_ir::MeasureOp> {
       return success();
     }
 
-    int64_t count = op->getAttrOfType<IntegerAttr>("qir.count").getInt();
+    int64_t count = op->getAttrOfType<IntegerAttr>("metadata.count").getInt();
     Value base = LLVM::ExtractValueOp::create(rewriter, op.getLoc(), qubits,
                                               ArrayRef<int64_t>{0});
     Type pointerType = LLVM::LLVMPointerType::get(rewriter.getContext());
@@ -729,11 +734,11 @@ struct JaspToQIRPass final
         int64_t numQubits = numQubitsValue.getSExtValue();
         if (!dynamic) {
           create->setAttr(
-              "qir.base",
+              "metadata.base",
               IntegerAttr::get(IntegerType::get(&context, 64), nextQubit));
         }
         create->setAttr(
-            "qir.count",
+            "metadata.count",
             IntegerAttr::get(IntegerType::get(&context, 64), numQubits));
         qubitArraySizes[create.getResult()] = numQubits;
         nextQubit += numQubits;
@@ -752,10 +757,10 @@ struct JaspToQIRPass final
           count = mapPair->second;
         }
         measure->setAttr(
-            "qir.result_base",
+            "metadata.result_base",
             IntegerAttr::get(IntegerType::get(&context, 64), nextResult));
         measure->setAttr(
-            "qir.count",
+            "metadata.count",
             IntegerAttr::get(IntegerType::get(&context, 64), count));
         nextResult += count;
 
@@ -785,30 +790,22 @@ struct JaspToQIRPass final
     }
 
 
-    // These are QIR attributes. We store them in MLIR as module attributes.
+    // These are QIR module flags. We store them in MLIR as module attributes.
     ModuleOp module = getOperation();
     auto i64 = IntegerType::get(&context, 64);
-    module->setAttr("jasp.resource_management",
-                    StringAttr::get(&context, resourceManagement));
+    module->setAttr("metadata.resource_management", StringAttr::get(&context, resourceManagement));
+
     if (!dynamic) {
-      module->setAttr("jasp.required_num_qubits",
-                      IntegerAttr::get(i64, nextQubit));
-      module->setAttr("jasp.required_num_results",
-                      IntegerAttr::get(i64, nextResult));
+      module->setAttr("entrypoint_attribute.required_num_qubits", IntegerAttr::get(i64, nextQubit));
+      module->setAttr("entrypoint_attribute.required_num_results", IntegerAttr::get(i64, nextResult));
     }
-    module->setAttr("jasp.ir_functions",
-                    BoolAttr::get(&context, functionCount > 1));
-    module->setAttr("jasp.backwards_branching",
-                    BoolAttr::get(&context, hasLoop));
-    module->setAttr("jasp.multiple_target_branching",
-                    BoolAttr::get(&context, hasSwitch));
-    module->setAttr("jasp.multiple_return_points",
-                    BoolAttr::get(&context, mainReturnCount > 1));
-    module->setAttr("jasp.float_computations",
-                    BoolAttr::get(&context, hasFloat));
+    module->setAttr("module_flag.ir_functions", BoolAttr::get(&context, functionCount > 1));
+    module->setAttr("module_flag.backwards_branching", BoolAttr::get(&context, hasLoop));
+    module->setAttr("module_flag.multiple_target_branching", BoolAttr::get(&context, hasSwitch));
+    module->setAttr("module_flag.multiple_return_points", BoolAttr::get(&context, mainReturnCount > 1));
+    module->setAttr("module_flag.float_computations", BoolAttr::get(&context, hasFloat));
 
 
-    // Type conversion rules
     TypeConverter converter;
 
     // default -> do nothing
@@ -862,20 +859,23 @@ struct JaspToQIRPass final
     });
 
     RewritePatternSet patterns(&context);
-    patterns
-        .add<PassState<jasp_ir::CreateQuantumKernelOp>,
-             PassState<jasp_ir::ConsumeQuantumKernelOp>,
-             LowerGetSize, LowerGate,
-             ScalarConstant, ScalarExtract, ScalarFromElements>(converter,
-                                                                &context);
-    patterns.add<LowerCreateQubits, LowerDeleteQubits, LowerGetQubit,
-                 LowerReset, LowerMeasure>(converter, &context, dynamic);
-    populateFunctionOpInterfaceTypeConversionPattern<func::FuncOp>(patterns,
-                                                                   converter);
+    patterns.add<PassState<jasp_ir::CreateQuantumKernelOp>,
+                 PassState<jasp_ir::ConsumeQuantumKernelOp>,
+                 LowerGetSize,
+                 LowerGate,
+                 ScalarConstant,
+                 ScalarExtract,
+                 ScalarFromElements>(converter, &context);
+    patterns.add<LowerCreateQubits,
+                 LowerDeleteQubits,
+                 LowerGetQubit,
+                 LowerReset,
+                 LowerMeasure>(converter, &context, dynamic);
+
+    populateFunctionOpInterfaceTypeConversionPattern<func::FuncOp>(patterns, converter);
     populateCallOpTypeConversionPattern(patterns, converter);
     populateReturnOpTypeConversionPattern(patterns, converter);
-    scf::populateSCFStructuralTypeConversionsAndLegality(converter, patterns,
-                                                         target);
+    scf::populateSCFStructuralTypeConversionsAndLegality(converter, patterns, target);
 
     if (failed(applyFullConversion(module, target, std::move(patterns)))) {
       signalPassFailure();

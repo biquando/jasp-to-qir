@@ -13,6 +13,7 @@ int main(int argc, char **argv) {
   mlir::registerAllDialects(registry);
   registry.insert<jasp::JaspDialect>();
   mlir::registerPass([] { return mlir::jasp::createJaspToQIRPass(); });
+  mlir::registerPass([] { return mlir::jasp::createFinalizeQIRLLVMPass(); });
   return mlir::asMainReturnCode(
       mlir::MlirOptMain(argc, argv, "Jasp to QIR\n", registry));
 }
