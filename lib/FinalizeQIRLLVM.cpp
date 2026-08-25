@@ -145,7 +145,6 @@ LogicalResult declareQIRFunctions(ModuleOp module, OpBuilder &builder,
   }
 
   (*mz).setPassthroughAttr(buildAttributes(builder, {"irreversible"}, {}));
-  (*reset).setPassthroughAttr(buildAttributes(builder, {"irreversible"}, {}));
   setArgumentAttribute(builder, *mz, 1, "llvm.writeonly");
   setArgumentAttribute(builder, *read_result, 0, "llvm.readonly");
 

@@ -161,40 +161,18 @@ Value fixedPointerBuffer(OpBuilder &builder, Location location, int64_t count) {
                                 llvmConstant(builder, location, 1), 8);
 }
 
-Block *functionEntryBlock(Operation *operation) {
-  if (auto function = operation->getParentOfType<func::FuncOp>()) {
-    return &function.getBody().front();
-  }
-  if (auto function = operation->getParentOfType<LLVM::LLVMFuncOp>()) {
-    return &function.getBody().front();
-  }
-  return nullptr;
+// The QIR validator lowers dynamic result slots to entry-block stack storage.
+// Function-scoped lifetimes keep those slots valid across branches and loops.
+Block *functionEntry(Operation *operation) {
+  return &operation->getParentOfType<func::FuncOp>().getBody().front();
 }
 
 void releaseAtFunctionReturns(Operation *operation, StringRef name,
                               ValueRange arguments) {
-  Operation *function = operation->getParentOfType<func::FuncOp>();
-  if (!function) {
-    function = operation->getParentOfType<LLVM::LLVMFuncOp>();
-  }
-  assert(function && "expected measurement inside a function");
-
-  SmallVector<Operation *> returns;
-  function->walk([&](Operation *nested) {
-    if (isa<func::ReturnOp, LLVM::ReturnOp>(nested)) {
-      returns.push_back(nested);
-    }
-  });
-  for (Operation *returnOp : returns) {
+  operation->getParentOfType<func::FuncOp>().walk([&](func::ReturnOp returnOp) {
     OpBuilder builder(returnOp);
-    emitQirCall(builder, returnOp->getLoc(), name, arguments);
-  }
-}
-
-bool isInsideLoop(Operation *operation) {
-  return operation->getParentOfType<scf::ForOp>() ||
-         operation->getParentOfType<scf::ParallelOp>() ||
-         operation->getParentOfType<scf::WhileOp>();
+    emitQirCall(builder, returnOp.getLoc(), name, arguments);
+  });
 }
 
 /// Measures one qubit into its assigned QIR result slot and reads the slot
@@ -212,23 +190,24 @@ Value measureStaticQubit(OpBuilder &builder, Location location, Value qubit,
     .getResult();
 }
 
-/// Used for jasp.create_quantum_kernel and jasp.consume_quantum_kernel. These
-/// functions create/delete a quantum state, but QIR does not use represent the
-/// quantum state explicitly, instead relying on function side effects. Thus
-/// this function converts the quantum state into just the boolean "true".
-template <typename OpTy> struct PassState final : OpConversionPattern<OpTy> {
-  using OpConversionPattern<OpTy>::OpConversionPattern;
-  LogicalResult matchAndRewrite(OpTy op, typename OpTy::Adaptor adaptor,
+struct LowerCreateQuantumKernel final
+    : OpConversionPattern<jasp_ir::CreateQuantumKernelOp> {
+  using OpConversionPattern::OpConversionPattern;
+  LogicalResult matchAndRewrite(jasp_ir::CreateQuantumKernelOp op, OpAdaptor,
                                 ConversionPatternRewriter &rewriter) const override {
-    Value state = adaptor.getOperands().empty()
+    rewriter.eraseOp(op);
+    return success();
+  }
+};
 
-                      // jasp.create_quantum_kernel
-                      ? arith::ConstantOp::create(rewriter, op.getLoc(), rewriter.getBoolAttr(true)).getResult()
-
-                      // jasp.consume_quantum_kernel
-                      : adaptor.getOperands().back();
-
-    rewriter.replaceOp(op, state);
+struct LowerConsumeQuantumKernel final
+    : OpConversionPattern<jasp_ir::ConsumeQuantumKernelOp> {
+  using OpConversionPattern::OpConversionPattern;
+  LogicalResult matchAndRewrite(jasp_ir::ConsumeQuantumKernelOp op,
+                                OneToNOpAdaptor,
+                                ConversionPatternRewriter &rewriter) const override {
+    rewriter.replaceOpWithNewOp<arith::ConstantOp>(
+        op, rewriter.getBoolAttr(true));
     return success();
   }
 };
@@ -238,14 +217,14 @@ struct LowerCreateQubits final : OpConversionPattern<jasp_ir::CreateQubitsOp> {
                     bool dynamic)
       : OpConversionPattern(converter, context), dynamic(dynamic) {}
   LogicalResult
-  matchAndRewrite(jasp_ir::CreateQubitsOp op, OpAdaptor adaptor,
+  matchAndRewrite(jasp_ir::CreateQubitsOp op, OneToNOpAdaptor adaptor,
                   ConversionPatternRewriter &rewriter) const override {
     auto type = llvmQubitArrayType(rewriter.getContext(), dynamic);
 
     // Create an llvm struct to hold the qubit array base/size
     Value arrayStruct = LLVM::UndefOp::create(rewriter, op.getLoc(), type);
 
-    Value size = adaptor.getAmount();
+    Value size = adaptor.getAmount().front();
 
     Value base;
     if (dynamic) {
@@ -270,7 +249,7 @@ struct LowerCreateQubits final : OpConversionPattern<jasp_ir::CreateQubitsOp> {
     arrayStruct = LLVM::InsertValueOp::create(
         rewriter, op.getLoc(), arrayStruct, size, ArrayRef<int64_t>{1});
 
-    rewriter.replaceOp(op, {arrayStruct, adaptor.getQstIn()});
+    rewriter.replaceOp(op, arrayStruct);
     return success();
   }
 
@@ -312,18 +291,20 @@ struct LowerDeleteQubits final
       : OpConversionPattern(converter, context), dynamic(dynamic) {}
 
   LogicalResult
-  matchAndRewrite(jasp_ir::DeleteQubitsOp op, OpAdaptor adaptor,
+  matchAndRewrite(jasp_ir::DeleteQubitsOp op, OneToNOpAdaptor adaptor,
                   ConversionPatternRewriter &rewriter) const override {
     if (dynamic) {
       Value buffer = LLVM::ExtractValueOp::create(
-          rewriter, op.getLoc(), adaptor.getQubits(), ArrayRef<int64_t>{0});
+          rewriter, op.getLoc(), adaptor.getQubits().front(),
+          ArrayRef<int64_t>{0});
       Value size = LLVM::ExtractValueOp::create(
-          rewriter, op.getLoc(), adaptor.getQubits(), ArrayRef<int64_t>{1});
+          rewriter, op.getLoc(), adaptor.getQubits().front(),
+          ArrayRef<int64_t>{1});
       emitQirCall(rewriter, op.getLoc(),
                       "__quantum__rt__qubit_array_release",
                       ValueRange{size, buffer});
     }
-    rewriter.replaceOp(op, adaptor.getInQst());
+    rewriter.eraseOp(op);
     return success();
   }
 
@@ -346,9 +327,9 @@ struct LowerReset final : OpConversionPattern<jasp_ir::ResetOp> {
   LowerReset(TypeConverter &converter, MLIRContext *context, bool dynamic)
       : OpConversionPattern(converter, context), dynamic(dynamic) {}
   LogicalResult
-  matchAndRewrite(jasp_ir::ResetOp op, OpAdaptor adaptor,
+  matchAndRewrite(jasp_ir::ResetOp op, OneToNOpAdaptor adaptor,
                   ConversionPatternRewriter &rewriter) const override {
-    Value qubits = adaptor.getQubits();
+    Value qubits = adaptor.getQubits().front();
 
     // Single qubit case
     if (isa<LLVM::LLVMPointerType>(qubits.getType())) {
@@ -381,7 +362,7 @@ struct LowerReset final : OpConversionPattern<jasp_ir::ResetOp> {
             scf::YieldOp::create(builder, location);
           });
     }
-    rewriter.replaceOp(op, adaptor.getInQst());
+    rewriter.eraseOp(op);
     return success();
   }
 
@@ -392,13 +373,16 @@ private:
 struct LowerGate final : OpConversionPattern<jasp_ir::QuantumGateOp> {
   using OpConversionPattern::OpConversionPattern;
   LogicalResult
-  matchAndRewrite(jasp_ir::QuantumGateOp op, OpAdaptor adaptor,
+  matchAndRewrite(jasp_ir::QuantumGateOp op, OneToNOpAdaptor adaptor,
                   ConversionPatternRewriter &rewriter) const override {
     const GateSpec *spec = findGate(op.getGateType());
     if (!spec) {
       return rewriter.notifyMatchFailure(op, "unsupported gate");
     }
-    SmallVector<Value> arguments(adaptor.getGateOperands());
+    SmallVector<Value> arguments;
+    for (ValueRange values : adaptor.getGateOperands()) {
+      arguments.append(values.begin(), values.end());
+    }
 
     // The arguments in Jasp MLIR (qubit, angle) are in the reverse order
     // as Quantinuum's QIR (angle, qubit)
@@ -406,7 +390,7 @@ struct LowerGate final : OpConversionPattern<jasp_ir::QuantumGateOp> {
       std::swap(arguments[0], arguments[1]);
     }
     emitQirCall(rewriter, op.getLoc(), spec->qirName, arguments);
-    rewriter.replaceOp(op, adaptor.getInQst());
+    rewriter.eraseOp(op);
     return success();
   }
 };
@@ -418,32 +402,24 @@ struct LowerMeasure final : OpConversionPattern<jasp_ir::MeasureOp> {
   /// 1. Lowers scalar and fixed-size array measurements
   /// 2. Records measurement output
   /// 3. Produces the classical value (i1 or packed i64)
-  /// 4. Releases any dynamic result resources at a safe point
-  LogicalResult matchAndRewrite(jasp_ir::MeasureOp op, OpAdaptor adaptor,
+  /// 4. Releases dynamic result resources on every function return
+  LogicalResult matchAndRewrite(jasp_ir::MeasureOp op, OneToNOpAdaptor adaptor,
                                 ConversionPatternRewriter &rewriter) const override {
     // Read the result range assigned during module analysis and distinguish a
     // scalar qubit from the lowered qubit-array struct.
     int64_t resultBase = op->getAttrOfType<IntegerAttr>("metadata.result_base").getInt();
-    Value qubits = adaptor.getMeasQ();
+    Value qubits = adaptor.getMeasQ().front();
 
-    // Lower a scalar measurement to an i1 and forward the quantum-state token.
+    // Lower a scalar measurement to an i1.
     if (isa<LLVM::LLVMPointerType>(qubits.getType())) {
       Value bit;
       if (dynamic) {
-        // Allocate the dynamic result in the function entry block so a
-        // measurement inside a loop reuses one result handle.
         Type pointerType = LLVM::LLVMPointerType::get(rewriter.getContext());
-        Block *entry = functionEntryBlock(op);
-        if (!entry) {
-          return rewriter.notifyMatchFailure(op, "expected enclosing function");
-        }
         Value result;
         {
           OpBuilder::InsertionGuard guard(rewriter);
-          rewriter.setInsertionPointToStart(entry);
+          rewriter.setInsertionPointToStart(functionEntry(op));
           Value null = LLVM::ZeroOp::create(rewriter, op.getLoc(), pointerType);
-          // FIXME: this call should actually have (ptr %out_err) args?
-          // https://github.com/qir-alliance/qir-spec/blob/2.1/specification/Memory_Management.md#single-resource-allocation-api
           result = emitQirCall(rewriter, op.getLoc(),
                                    "__quantum__rt__result_allocate",
                                    ValueRange{null}, TypeRange{pointerType})
@@ -457,18 +433,11 @@ struct LowerMeasure final : OpConversionPattern<jasp_ir::MeasureOp> {
                   ValueRange{result}, TypeRange{rewriter.getI1Type()})
               .getResult();
 
-        // Release a reused loop result at function exit; otherwise release it
-        // immediately after its value has been read.
-        // TODO: does this work for nested control flow (e.g. for(...){if(...){}})
-        if (isInsideLoop(op)) {
-          releaseAtFunctionReturns(op, "__quantum__rt__result_release", result);
-        } else {
-          emitQirCall(rewriter, op.getLoc(), "__quantum__rt__result_release", result);
-        }
+        releaseAtFunctionReturns(op, "__quantum__rt__result_release", result);
       } else {
         bit = measureStaticQubit(rewriter, op.getLoc(), qubits, resultBase);
       }
-      rewriter.replaceOp(op, {bit, adaptor.getInQst()});
+      rewriter.replaceOp(op, bit);
       return success();
     }
 
@@ -480,15 +449,9 @@ struct LowerMeasure final : OpConversionPattern<jasp_ir::MeasureOp> {
     Value resultBuffer;
     Value dynamicCount;
     if (dynamic) {
-      // Allocate fixed-size dynamic result storage in the function entry block
-      // so measurements inside loops reuse the same result array.
-      Block *entry = functionEntryBlock(op);
-      if (!entry) {
-        return rewriter.notifyMatchFailure(op, "expected enclosing function");
-      }
       {
         OpBuilder::InsertionGuard guard(rewriter);
-        rewriter.setInsertionPointToStart(entry);
+        rewriter.setInsertionPointToStart(functionEntry(op));
         dynamicCount = llvmConstant(rewriter, op.getLoc(), count);
         resultBuffer = fixedPointerBuffer(rewriter, op.getLoc(), count);
         Value null = LLVM::ZeroOp::create(rewriter, op.getLoc(), pointerType);
@@ -542,23 +505,12 @@ struct LowerMeasure final : OpConversionPattern<jasp_ir::MeasureOp> {
       packed = LLVM::OrOp::create(rewriter, op.getLoc(), packed, shifted);
     }
 
-    // Release a reused dynamic result array at function exit; otherwise
-    // release it immediately after all of its results have been read.
     if (dynamic) {
-      if (isInsideLoop(op)) {
-        releaseAtFunctionReturns(
-            op, "__quantum__rt__result_array_release",
-            ValueRange{dynamicCount, resultBuffer});
-      } else {
-        emitQirCall(rewriter, op.getLoc(),
-                        "__quantum__rt__result_array_release",
-                        ValueRange{dynamicCount, resultBuffer});
-      }
+      releaseAtFunctionReturns(op, "__quantum__rt__result_array_release",
+                               ValueRange{dynamicCount, resultBuffer});
     }
 
-    // Replace the Jasp operation with its packed classical result and forward
-    // the quantum-state token, whose effects are represented by the QIR calls.
-    rewriter.replaceOp(op, {packed, adaptor.getInQst()});
+    rewriter.replaceOp(op, packed);
     return success();
   }
 
@@ -651,14 +603,9 @@ LogicalResult prepareMain(ModuleOp module) {
     return main.emitError("expected one Jasp state argument on @main");
   }
 
-  OpBuilder builder(&main.getBody().front(), main.getBody().front().begin());
-  Value state = arith::ConstantOp::create(builder, main.getLoc(),
-                                          builder.getBoolAttr(true));
-  main.getArgument(0).replaceAllUsesWith(state);
-  if (failed(main.eraseArgument(0))) {
-    return main.emitError("could not remove the Jasp state argument");
-  }
-  main.setFunctionType(builder.getFunctionType({}, builder.getI64Type()));
+  OpBuilder builder(main.getContext());
+  main.setFunctionType(builder.getFunctionType(main.getArgumentTypes(),
+                                                builder.getI64Type()));
 
   main.walk([&](func::ReturnOp returnOp) {
     OpBuilder returnBuilder(returnOp);
@@ -832,9 +779,10 @@ struct JaspToQIRPass final
       return std::nullopt; // don't know how to convert
     });
 
-    // quantum state -> dummy type, relying on QIR's side effects
-    converter.addConversion([&](jasp_ir::QuantumStateType) -> Type {
-      return IntegerType::get(&context, 1);
+    // Quantum state has no QIR representation; effects are carried by calls.
+    converter.addConversion([](jasp_ir::QuantumStateType,
+                               SmallVectorImpl<Type> &) -> LogicalResult {
+      return success();
     });
 
     // qubit -> opaque ptr type in QIR
@@ -871,8 +819,8 @@ struct JaspToQIRPass final
     });
 
     RewritePatternSet patterns(&context);
-    patterns.add<PassState<jasp_ir::CreateQuantumKernelOp>,
-                 PassState<jasp_ir::ConsumeQuantumKernelOp>,
+    patterns.add<LowerCreateQuantumKernel,
+                 LowerConsumeQuantumKernel,
                  LowerGetSize,
                  LowerGate,
                  ScalarConstant,

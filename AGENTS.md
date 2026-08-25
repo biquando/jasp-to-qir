@@ -77,7 +77,7 @@ Use qir-runner to run a QIR file.
   control flow, arithmetic, and LLVM conversion.
 - QIR ABI details matter: use supported QIS/runtime declarations, required
   module flags, entry-point attributes, and correct function attributes for
-  irreversible measurement and reset operations.
+  irreversible measurement operations.
 - Static resource management is the driver default and uses consecutive QIR
   resource handles. Dynamic mode is selected with
   `--resource-management dynamic` and uses the Adaptive Profile's optional

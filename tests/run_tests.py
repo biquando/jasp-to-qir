@@ -216,14 +216,18 @@ def verify_semantics(outputs: dict[tuple[str, str], Path], temp: Path) -> None:
         outputs[("static", "many_results.mlir")],
         '@label10 = internal constant [10 x i8] c"result_10\\00"',
     )
+    require_contains(
+        outputs[("static", "statevector_tfim.mlir")],
+        "define void @conjugation_env({ i64, i64 } %0)",
+    )
     reset = require_contains(
         outputs[("static", "reset_array.mlir")],
-        "declare void @__quantum__qis__reset__body(ptr) #",
-        '"irreversible"',
+        "declare void @__quantum__qis__reset__body(ptr)",
     )
     require(
-        "__quantum__qis__reset__body({" not in reset,
-        "reset received an array descriptor",
+        "__quantum__qis__reset__body({" not in reset
+        and "declare void @__quantum__qis__reset__body(ptr) #" not in reset,
+        "reset has an array parameter or function attributes",
     )
     conditional = require_contains(outputs[("static", "conditional_measurement.mlir")])
     require_adjacent(
@@ -268,6 +272,12 @@ def verify_semantics(outputs: dict[tuple[str, str], Path], temp: Path) -> None:
         )
         == 2,
         "conditional measurement did not release two scalar results",
+    )
+    before_branch, after_branch = dynamic_conditional.split("br i1", 1)
+    require(
+        before_branch.count("call ptr @__quantum__rt__result_allocate") == 2
+        and after_branch.count("call void @__quantum__rt__result_release") == 2,
+        "conditional result lifetime is not balanced across both branches",
     )
     require_adjacent(
         dynamic_conditional,
@@ -664,6 +674,12 @@ def verify_intermediates(temp: Path) -> None:
     require(
         raw.count("call void @__quantum__rt__initialize(ptr null)") == 1,
         "raw LLVM main was not initialized exactly once",
+    )
+    environment = os.environ.copy()
+    environment.update({"LLVM_BIN": str(LLVM_BIN), "PATH": ""})
+    run(
+        [sys.executable, DRIVER, QRISP / "basic.mlir", temp / "llvm-bin.ll"],
+        env=environment,
     )
     print("PASS --keep-intermediates")
 

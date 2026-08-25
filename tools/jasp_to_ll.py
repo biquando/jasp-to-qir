@@ -2,6 +2,7 @@
 """Lower Jasp MLIR through to Adaptive-Profile QIR."""
 
 import argparse
+import os
 import re
 import subprocess
 from dataclasses import dataclass
@@ -9,7 +10,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 JASP_OPT = ROOT / "build/jasp-to-qir"
-MLIR_TRANSLATE = "mlir-translate"
+LLVM_BIN = os.environ.get("LLVM_BIN")
+MLIR_TRANSLATE = Path(LLVM_BIN) / "mlir-translate" if LLVM_BIN else "mlir-translate"
 
 
 @dataclass(frozen=True)
