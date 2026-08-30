@@ -2,8 +2,8 @@
 
 #include "mlir/Pass/Pass.h"
 
-namespace mlir {
-namespace jasp {
+
+namespace mlir::jasp {
 
 /// Lowers Jasp operations before MLIR's standard SCF, CF, and LLVM passes.
 std::unique_ptr<Pass> createJaspToQIRPass();
@@ -12,5 +12,4 @@ std::unique_ptr<Pass> createJaspToQIRPass();
 /// standard conversion has produced an LLVM-dialect module.
 std::unique_ptr<Pass> createFinalizeQIRLLVMPass();
 
-} // namespace jasp
-} // namespace mlir
+} // namespace mlir::jasp
