@@ -38,6 +38,7 @@ QIR_STATEVECTOR = ROOT / "tools/qir_statevector.py"
 LLVM_BIN = Path(os.environ.get("LLVM_BIN", "/opt/homebrew/opt/llvm/bin"))
 OPT = LLVM_BIN / "opt"
 STATEVECTOR_TOLERANCE = 1e-6
+RESOURCE_MODES = ("static", "dynamic")
 
 _temp_owner: tempfile.TemporaryDirectory[str] | None = None
 _temp: Path | None = None
@@ -327,10 +328,31 @@ def amplitudes_by_basis(document: dict) -> dict[str, list[float]]:
     }
 
 
+def remove_zero_suffix_qubits(document: dict, qubits: int, case: str, mode: str) -> dict:
+    """Remove unused trailing simulator qubits after verifying they are zero."""
+
+    extra_qubits = document["num_qubits"] - qubits
+    if extra_qubits <= 0:
+        return document
+    stride = 1 << extra_qubits
+    amplitudes = document["amplitudes"]
+    for index, pair in enumerate(amplitudes):
+        if index % stride:
+            require(
+                abs(complex(*pair)) <= STATEVECTOR_TOLERANCE,
+                f"{case} ({mode}): temporary qubit is not zero at amplitude {index}",
+            )
+    projected = dict(document)
+    projected["num_qubits"] = qubits
+    projected["qubits"] = document["qubits"][:qubits]
+    projected["amplitudes"] = amplitudes[::stride]
+    return projected
+
+
 def verify_statevectors(
     outputs: dict[tuple[str, str], Path], cases, temp: Path
 ) -> dict:
-    """Compare Qrisp and Selene/QuEST vectors in both resource modes."""
+    """Compare Qrisp and Selene/QuEST vectors in the requested resource modes."""
 
     comparisons = 0
     report = {}
@@ -354,17 +376,18 @@ def verify_statevectors(
         )
         expected = load_statevector(qrisp_output)
         require(
-            expected["num_qubits"] == case["qubits"],
-            f"{fixture_name}: Qrisp returned an unexpected qubit count",
+            expected["num_qubits"] <= case["qubits"],
+            f"{fixture_name}: Qrisp requires more than the simulator capacity",
         )
         case_report = {
             "num_qubits": expected["num_qubits"],
             "basis_order": expected["basis_order"],
             "tolerance": STATEVECTOR_TOLERANCE,
+            "resource_modes": case["resource_modes"],
         }
         amplitudes = {"qrisp": amplitudes_by_basis(expected)}
 
-        for mode in ("static", "dynamic"):
+        for mode in case["resource_modes"]:
             qir_output = temp / f"{Path(fixture_name).stem}.{mode}.qir-state.json"
             command: list[str | Path] = [
                 sys.executable,
@@ -382,6 +405,9 @@ def verify_statevectors(
             require(
                 actual["num_qubits"] == case["qubits"],
                 f"{fixture_name} ({mode}): QIR resource-count mismatch",
+            )
+            actual = remove_zero_suffix_qubits(
+                actual, expected["num_qubits"], fixture_name, mode
             )
             maximum_difference = compare_statevectors(
                 expected, actual, fixture_name, mode
@@ -401,16 +427,27 @@ def verify_statevectors(
     return report
 
 
-def verify_statevector_case(case_dir: Path, qubits: int) -> None:
+def verify_statevector_case(
+    case_dir: Path,
+    qubits: int,
+    resource_modes: tuple[str, ...] = RESOURCE_MODES,
+) -> None:
     """Run one state-vector case and retain its report entry."""
 
+    require(bool(resource_modes), "a state-vector case must select a resource mode")
+    require(
+        len(set(resource_modes)) == len(resource_modes)
+        and all(mode in RESOURCE_MODES for mode in resource_modes),
+        f"invalid resource modes: {resource_modes}",
+    )
     name = case_dir.name
     report = verify_statevectors(
-        {(mode, name): output(case_dir, mode) for mode in ("static", "dynamic")},
+        {(mode, name): output(case_dir, mode) for mode in resource_modes},
         {name: {
             "function": load_case(case_dir / "test_case.py").qrisp_program,
             "source": case_dir / "test_case.py",
             "qubits": qubits,
+            "resource_modes": resource_modes,
         }},
         temp_dir(),
     )
@@ -614,36 +651,39 @@ def write_semantic_report(
     ]
 
     for case, report in statevectors.items():
+        modes = report["resource_modes"]
+        sources = ("qrisp", *(f"{mode}_qir" for mode in modes))
+        headings = ("Qrisp", *(f"{mode.title()} QIR" for mode in modes))
         amplitude_rows = [
             (
                 basis,
-                format_amplitude(amplitudes["qrisp"]),
-                format_amplitude(amplitudes["static_qir"]),
-                format_amplitude(amplitudes["dynamic_qir"]),
+                *(format_amplitude(amplitudes[source]) for source in sources),
             )
             for basis, amplitudes in report["amplitudes"].items()
         ]
         basis_width = max(len("basis"), *(len(row[0]) for row in amplitude_rows))
         value_width = max(
-            len("Dynamic QIR"),
+            *(len(heading) for heading in headings),
             *(len(value) for row in amplitude_rows for value in row[1:]),
+        )
+        differences = ", ".join(
+            f"{mode}={report[f'{mode}_max_abs_difference']:.6g}" for mode in modes
         )
         lines.extend(
             [
                 "",
                 f"State vector: {case}",
-                f"  max |difference|: static={report['static_max_abs_difference']:.6g}, "
-                f"dynamic={report['dynamic_max_abs_difference']:.6g}",
-                f"  {'basis':<{basis_width}}  {'Qrisp':<{value_width}}  "
-                f"{'Static QIR':<{value_width}}  Dynamic QIR",
-                f"  {'-' * basis_width}  {'-' * value_width}  "
-                f"{'-' * value_width}  {'-' * value_width}",
+                f"  max |difference|: {differences}",
+                f"  {'basis':<{basis_width}}  "
+                + "  ".join(f"{heading:<{value_width}}" for heading in headings),
+                f"  {'-' * basis_width}  "
+                + "  ".join("-" * value_width for _ in headings),
             ]
         )
         lines.extend(
-            f"  {basis:<{basis_width}}  {qrisp:<{value_width}}  "
-            f"{static:<{value_width}}  {dynamic}"
-            for basis, qrisp, static, dynamic in amplitude_rows
+            f"  {row[0]:<{basis_width}}  "
+            + "  ".join(f"{value:<{value_width}}" for value in row[1:])
+            for row in amplitude_rows
         )
 
     for case, report in measurements.items():

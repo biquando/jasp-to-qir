@@ -25,7 +25,7 @@ target_include_directories(JaspDialect PUBLIC
   ${CMAKE_CURRENT_BINARY_DIR}
   ${MLIR_INCLUDE_DIRS}
 )
-target_link_libraries(JaspDialect PUBLIC MLIRIR)
+mlir_target_link_libraries(JaspDialect PUBLIC MLIRIR)
 
 add_subdirectory(lib/Conversion/JaspToQIR)
 add_subdirectory(lib/Transformation/FinalizeQIRLLVM)
@@ -34,8 +34,12 @@ add_executable(jasp-to-qir tools/jasp-to-qir.cpp)
 target_link_libraries(jasp-to-qir PRIVATE
   JaspToQIRPass
   FinalizeQIRLLVMPass
+  LLVM
+)
+mlir_target_link_libraries(jasp-to-qir PRIVATE
   MLIROptLib
   MLIRRegisterAllDialects
   MLIRRegisterAllPasses
   MLIRMlirOptMain
+  MLIRFuncInlinerExtension
 )

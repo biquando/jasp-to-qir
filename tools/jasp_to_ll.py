@@ -111,6 +111,7 @@ def convert(
             f"resource-management={resource_management} "
             f"result-buffer-size={result_buffer_size}",
             "--canonicalize",
+            "--inline",
             "--convert-scf-to-cf",
             "--convert-cf-to-llvm",
             "--convert-arith-to-llvm",

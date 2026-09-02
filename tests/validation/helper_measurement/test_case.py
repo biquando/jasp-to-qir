@@ -21,8 +21,10 @@ class HelperMeasurementTest(support.ValidationTest):
         self.assertEqual(
             dynamic.count("call void @__quantum__rt__result_array_release"), 1
         )
-        helper = dynamic.split("@measure_helper", 1)[1].split(
-            "define i64 @main", 1
-        )[0]
-        self.assertNotIn("__quantum__rt__result_array_allocate", helper)
-        self.assertNotIn("__quantum__rt__result_array_release", helper)
+        support.require_adjacent(
+            dynamic,
+            "call void @__quantum__qis__mz__body",
+            "call void @__quantum__rt__result_record_output",
+            1,
+        )
+        self.assertNotIn("define void @measure_helper", dynamic)

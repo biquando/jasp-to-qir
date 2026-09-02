@@ -41,3 +41,9 @@ htmlcov/
 
 # Qrisp repo
 /Qrisp/
+
+# Testing stuff
+/TODO*
+/*.py
+/*.mlir
+/examples/

@@ -21,7 +21,3 @@ class StatevectorTfimTest(unittest.TestCase):
     def test_statevector_equivalence(self) -> None:
         case_dir = Path(__file__).parent
         support.verify_statevector_case(case_dir, 5)
-        support.require_contains(
-            support.output(case_dir),
-            "define void @conjugation_env({ i64, i64 } %0)",
-        )

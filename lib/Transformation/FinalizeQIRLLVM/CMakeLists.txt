@@ -7,7 +7,7 @@ target_include_directories(FinalizeQIRLLVMPass PUBLIC
   ${CMAKE_BINARY_DIR}
 )
 target_include_directories(FinalizeQIRLLVMPass PRIVATE ${MLIR_INCLUDE_DIRS})
-target_link_libraries(FinalizeQIRLLVMPass PUBLIC
+mlir_target_link_libraries(FinalizeQIRLLVMPass PUBLIC
   MLIRIR
   MLIRLLVMDialect
   MLIRPass

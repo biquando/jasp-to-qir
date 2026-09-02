@@ -12,7 +12,6 @@ class SliceTest(support.ValidationTest):
             support.output(self.case_dir, "dynamic"),
             "getelementptr ptr, ptr",
             "icmp slt i64",
-            "select i1",
             "call void @__quantum__rt__qubit_release(ptr",
         )
         self.assertNotIn("llvm.smin", dynamic)

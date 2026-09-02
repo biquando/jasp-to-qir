@@ -17,8 +17,8 @@ target_include_directories(JaspToQIRPass PUBLIC
   ${CMAKE_BINARY_DIR}
 )
 target_include_directories(JaspToQIRPass PRIVATE ${MLIR_INCLUDE_DIRS})
-target_link_libraries(JaspToQIRPass PUBLIC
-  JaspDialect
+target_link_libraries(JaspToQIRPass PUBLIC JaspDialect)
+mlir_target_link_libraries(JaspToQIRPass PUBLIC
   MLIRIR
   MLIRArithDialect
   MLIRLLVMDialect
