@@ -8,6 +8,81 @@ using namespace mlir;
 
 namespace {
 
+/// Replace the temporary global result-buffer alias after inlining. This leaves
+/// every measurement using the entry block's stack allocation directly, as
+/// required by the QIR validator.
+constexpr llvm::StringLiteral resultBufferGlobalName = "__jasp__result_buffer";
+LogicalResult useDirectResultBuffer(ModuleOp &module) {
+  auto global = module.lookupSymbol<LLVM::GlobalOp>(resultBufferGlobalName);
+  if (!global) {
+    return success();
+  }
+
+  auto main = module.lookupSymbol<LLVM::LLVMFuncOp>("main");
+  if (!main || main.getBody().empty()) {
+    return module.emitError("expected an LLVM @main entry point");
+  }
+
+  // Find all uses of the global alias
+  SmallVector<LLVM::AddressOfOp> addresses;
+  module.walk([&](LLVM::AddressOfOp address) {
+    if (address.getGlobalName() == resultBufferGlobalName) {
+      addresses.push_back(address);
+    }
+  });
+
+  // Find the stack-allocated buffer that gets stored into the global alias.
+  // If multiple buffers get stored into the global, they must be identical.
+  Value buffer;
+  for (LLVM::AddressOfOp address : addresses) {
+    for (Operation *user : address->getUsers()) {
+      auto store = dyn_cast<LLVM::StoreOp>(user);
+      if (!store || store.getAddr() != address.getResult()) {
+        continue;
+      }
+      if (buffer && buffer != store.getValue()) {
+        return store.emitError("conflicting result buffer aliases");
+      }
+      buffer = store.getValue();
+    }
+  }
+  if (!buffer) {
+    return global.emitError("missing result buffer initialization");
+  }
+  auto allocation = buffer.getDefiningOp<LLVM::AllocaOp>();
+  if (!allocation || allocation->getBlock() != &main.getBody().front()) {
+    return global.emitError(
+        "result buffer must be stack-allocated in the entry block");
+  }
+
+  // Replace each use of the global alias with the original stack-allocated
+  // result buffer.
+  for (LLVM::AddressOfOp address : addresses) {
+    SmallVector<Operation *> users(address->getUsers());
+    for (Operation *user : users) {
+      if (auto load = dyn_cast<LLVM::LoadOp>(user)) {
+        if (load->getParentOfType<LLVM::LLVMFuncOp>() != main) {
+          return load.emitError(
+              "result buffer user remained outside @main after inlining");
+        }
+        load.getResult().replaceAllUsesWith(buffer);
+        load.erase();
+      } else if (auto store = dyn_cast<LLVM::StoreOp>(user)) {
+        if (store.getAddr() != address.getResult()
+            || store.getValue() != buffer) {
+          return store.emitError("unexpected result buffer alias store");
+        }
+        store.erase();
+      } else {
+        return user->emitError("unexpected use of result buffer alias");
+      }
+    }
+    address.erase();
+  }
+  global.erase();
+  return success();
+}
+
 /// Gets the resource management mode ("static" or "dynamic") from the module
 /// metadata attribute.
 FailureOr<StringRef> resourceManagementMode(ModuleOp &module) {
@@ -150,7 +225,13 @@ struct FinalizeQIRLLVMPass final
       return;
     }
 
-    auto result = addEntrypointAttributes(module, builder, *mode);
+    auto result = useDirectResultBuffer(module);
+    if (failed(result)) {
+      signalPassFailure();
+      return;
+    }
+
+    result = addEntrypointAttributes(module, builder, *mode);
     if (failed(result)) {
       signalPassFailure();
       return;

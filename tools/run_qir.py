@@ -20,4 +20,7 @@ qis = qir_to_qis(qir_ll_to_bc(qir), target=target)
 runner = build(BitcodeString(qis))
 
 for label, value in runner.run(Quest(), n_qubits=args.n_qubits):
-    print(f"{label}: {value}")
+    if type(value) is list:
+        print(f"{label}: {''.join([str(v) for v in value])}")
+    else:
+        print(f"{label}: {value}")

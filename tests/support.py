@@ -494,15 +494,34 @@ def selene_result_bits(
             f"{case} ({mode}): missing output for width {width}",
         )
         if mode == "dynamic" and width > 1:
+            label = entries[cursor][0]
             items = flatten_tree(entries[cursor][1])
             cursor += 1
-            if len(items) == width:
+            if len(items) >= width:
                 values = [int(item) for item in items]
                 require(
                     all(bit in (0, 1) for bit in values),
                     f"{case} ({mode}): non-bit result array {values}",
                 )
-                bits.extend(values)
+                measured = values[:width]
+                bits.extend(measured)
+                if cursor < len(entries) and entries[cursor][0] == label:
+                    packed_items = flatten_tree(entries[cursor][1])
+                    require(
+                        len(packed_items) == 1,
+                        f"{case} ({mode}): malformed packed duplicate "
+                        f"{packed_items}",
+                    )
+                    packed = int(packed_items[0])
+                    expected_packed = sum(
+                        bit << index for index, bit in enumerate(measured)
+                    )
+                    require(
+                        packed == expected_packed,
+                        f"{case} ({mode}): result array packs to "
+                        f"{expected_packed}, but integer output is {packed}",
+                    )
+                    cursor += 1
                 continue
             require(
                 len(items) == 1,

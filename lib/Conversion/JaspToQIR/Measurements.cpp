@@ -114,8 +114,16 @@ struct LowerMeasure final : OpConversionPattern<::jasp::MeasureOp> {
                 });
 
             Value packed = loop.getResult(0);
-            qir.call("__quantum__rt__int_record_output",
-                     ValueRange{packed, qir.outputLabel(resultRange->base)});
+            Value capacity = qir.constantI64(options.resultBufferSize);
+            qir.call("__quantum__rt__result_array_record_output", ValueRange{
+                        capacity,
+                        resultBuffer,
+                        qir.outputLabel(resultRange->base)
+                    });
+            qir.call("__quantum__rt__int_record_output", ValueRange{
+                        packed,
+                        qir.outputLabel(resultRange->base)
+                    });
             rewriter.replaceOp(operation, packed);
             return success();
         }

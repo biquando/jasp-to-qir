@@ -10,11 +10,11 @@ class HelperMeasurementTest(support.ValidationTest):
         super().test_conversion_and_validation()
         dynamic = support.require_contains(
             support.output(self.case_dir, "dynamic"),
-            "@__jasp__result_buffer = internal global ptr null",
+            "alloca [64 x ptr]",
             "call void @__quantum__rt__result_array_allocate(i64 64",
-            "load ptr, ptr @__jasp__result_buffer",
             "call void @__quantum__rt__result_array_release(i64 64",
         )
+        self.assertNotIn("@__jasp__result_buffer", dynamic)
         self.assertEqual(
             dynamic.count("call void @__quantum__rt__result_array_allocate"), 1
         )

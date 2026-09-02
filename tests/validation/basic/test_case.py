@@ -28,14 +28,13 @@ class BasicTest(support.ValidationTest):
             "alloca ptr, i64 2",
             "call ptr @__quantum__rt__qubit_allocate(ptr null)",
             "__quantum__rt__result_array_allocate(i64 64",
+            "__quantum__rt__result_array_record_output(i64 64",
             "__quantum__rt__int_record_output(i64",
             "__quantum__rt__result_array_release(i64 64",
         )
         self.assertNotIn("required_num_", dynamic)
         self.assertNotIn("inttoptr", dynamic)
         self.assertNotIn("__quantum__rt__qubit_array_allocate", dynamic)
-        self.assertNotIn("__quantum__rt__result_array_record_output", dynamic)
-
         custom = support.temp_dir() / "basic.result-buffer-7.ll"
         support.run(
             [
@@ -51,6 +50,7 @@ class BasicTest(support.ValidationTest):
         support.require_contains(
             custom,
             "__quantum__rt__result_array_allocate(i64 7",
+            "__quantum__rt__result_array_record_output(i64 7",
             "__quantum__rt__result_array_release(i64 7",
         )
         support.run([sys.executable, support.VALIDATOR, custom])
