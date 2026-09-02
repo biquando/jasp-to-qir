@@ -34,8 +34,17 @@ class ConditionalMeasurementTest(support.ValidationTest):
                 2,
             )
         dynamic = support.output(self.case_dir, "dynamic").read_text()
-        self.assertEqual(dynamic.count("call ptr @__quantum__rt__result_allocate(ptr null)"), 2)
-        self.assertEqual(dynamic.count("  call void @__quantum__rt__result_release"), 2)
+        self.assertEqual(
+            dynamic.count("call void @__quantum__rt__result_array_allocate"), 1
+        )
+        self.assertEqual(
+            dynamic.count("call void @__quantum__rt__result_array_release"), 1
+        )
+        self.assertNotIn("__quantum__rt__result_allocate", dynamic)
         before_branch, after_branch = dynamic.split("br i1", 1)
-        self.assertEqual(before_branch.count("call ptr @__quantum__rt__result_allocate"), 2)
-        self.assertEqual(after_branch.count("call void @__quantum__rt__result_release"), 2)
+        self.assertEqual(
+            before_branch.count("call void @__quantum__rt__result_array_allocate"), 1
+        )
+        self.assertEqual(
+            after_branch.count("call void @__quantum__rt__result_array_release"), 1
+        )

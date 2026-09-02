@@ -84,16 +84,27 @@ Use qir-runner to run a QIR file.
   resource handles. Dynamic mode is selected with
   `--resource-management dynamic` and uses the Adaptive Profile's optional
   qubit/result allocation and array APIs.
-- Dynamic `jasp.create_qubits` uses fixed-size classical pointer storage with
-  `__quantum__rt__qubit_array_allocate`; explicit `jasp.delete_qubits` emits
-  the matching release, while undeleted allocations remain live until runtime
-  teardown. Allocation calls receive a null error pointer and terminate on
-  failure.
-- Scalar measurements dynamically allocate and record one result. Qubit-array
-  measurements use result arrays and one array output record while retaining
-  Jasp's packed integer for classical control flow. Qubit-array sizes must be
-  compile-time constants in both modes because the targeted Quantinuum ABI
-  requires fixed-size classical pointer buffers.
+- Dynamic `jasp.create_qubits` creates a runtime-sized stack buffer and fills it
+  in an SCF loop with calls to `__quantum__rt__qubit_allocate`. Explicit
+  `jasp.delete_qubits` releases each referenced qubit in a loop, while undeleted
+  allocations remain live until runtime teardown. Allocation calls receive a
+  null error pointer and terminate on failure.
+- Dynamic measurements share one reusable, compile-time-sized result buffer
+  allocated in the QIR entry point's entry block and released at every entry
+  point return. Helpers access it through a private pointer global. The driver
+  default is 64 slots and can be changed with `--result-buffer-size`. Scalar
+  measurements record a result value;
+  qubit-array measurements pack least-significant-bit first into an `i64` and
+  record one integer output.
+- Dynamic qubit-array sizes may be runtime values. Returning a qubit or qubit
+  array from an emitted helper function is rejected because its backing stack
+  storage cannot escape. Source-level returns from `main` are discarded during
+  entry-point preparation and therefore do not escape.
+- Dynamic `jasp.slice` creates a view with Python-style normalized indices.
+  Dynamic `jasp.fuse` copies scalar qubits and/or array elements into a new
+  runtime-sized stack buffer. The source Jasp program remains responsible for
+  correct ownership and nonduplicating deletion. Static slicing is supported,
+  but fusion requires dynamic resource management.
 - Record a measurement result immediately after its corresponding `mz` call;
   do not defer output recording to function exit. Output labels use the
   `result_<n>` form.
@@ -102,8 +113,8 @@ Use qir-runner to run a QIR file.
 - Unsupported quantum gates should produce a clear conversion error rather
   than silently generating different behavior.
 - Dialect operations that are parsed but not yet assigned Adaptive-Profile QIR
-  semantics (`slice`, `fuse`, and `parity`) must produce clear conversion
-  errors rather than silently generating different behavior.
+  semantics (`parity`) must produce a clear conversion error rather than
+  silently generating different behavior.
 
 ## Tests and fixtures
 

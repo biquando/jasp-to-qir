@@ -444,15 +444,62 @@ def qrisp_result_bits(result, widths: tuple[int, ...], case: str) -> list[int]:
     return bits
 
 
-def selene_result_bits(entries, case: str, mode: str) -> list[int]:
-    """Flatten Selene scalar and result-array records in emission order."""
+def selene_result_bits(
+    entries, widths: tuple[int, ...], case: str, mode: str
+) -> list[int]:
+    """Expand Selene scalar, result-array, and packed-integer records."""
 
     bits = []
-    for _, value in entries:
-        for item in flatten_tree(value):
-            bit = int(item)
-            require(bit in (0, 1), f"{case} ({mode}): non-bit Selene result {item}")
+    cursor = 0
+    for width in widths:
+        require(
+            cursor < len(entries),
+            f"{case} ({mode}): missing output for width {width}",
+        )
+        if mode == "dynamic" and width > 1:
+            items = flatten_tree(entries[cursor][1])
+            cursor += 1
+            if len(items) == width:
+                values = [int(item) for item in items]
+                require(
+                    all(bit in (0, 1) for bit in values),
+                    f"{case} ({mode}): non-bit result array {values}",
+                )
+                bits.extend(values)
+                continue
+            require(
+                len(items) == 1,
+                f"{case} ({mode}): malformed packed result {items}",
+            )
+            integer = int(items[0])
+            require(
+                0 <= integer < 1 << width,
+                f"{case} ({mode}): packed result {integer} exceeds width {width}",
+            )
+            bits.extend((integer >> index) & 1 for index in range(width))
+            continue
+
+        for _ in range(width):
+            require(
+                cursor < len(entries),
+                f"{case} ({mode}): incomplete scalar output",
+            )
+            items = flatten_tree(entries[cursor][1])
+            cursor += 1
+            require(
+                len(items) == 1,
+                f"{case} ({mode}): expected a scalar result, got {items}",
+            )
+            bit = int(items[0])
+            require(
+                bit in (0, 1),
+                f"{case} ({mode}): non-bit Selene result {bit}",
+            )
             bits.append(bit)
+    require(
+        cursor == len(entries),
+        f"{case} ({mode}): got {len(entries) - cursor} unexpected output records",
+    )
     return bits
 
 
@@ -504,7 +551,9 @@ def verify_measurements(
                     raise TestFailure(
                         f"{fixture_name} ({mode}): Selene execution failed: {error}"
                     ) from error
-                qir_bits = selene_result_bits(entries, fixture_name, mode)
+                qir_bits = selene_result_bits(
+                    entries, tuple(case["widths"]), fixture_name, mode
+                )
                 require(
                     qir_bits == expected,
                     f"{fixture_name} ({mode}): QIR produced {qir_bits}, "

@@ -62,8 +62,13 @@ python tools/jasp_to_ll.py --dynamic bell.mlir bell.ll
 Use `--keep-intermediates` to retain the generated `.llvm.mlir` and `.raw.ll`
 files.
 
-Because of a limitation of Quantinuum's QIR, run-time sized classical buffers
-are not supported.
+Use `--result-buffer-size` to configure the maximum amount of qubits that can be
+measured at once, as well as the number of bits outputted with each measurement.
+
+Because of a limitation of Quantinuum's QIR, the following are not currently
+supported:
+- Helper functions that allocate/delete qubits
+- Helper functions that return qubits
 
 ## Simulating a QIR program
 

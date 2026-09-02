@@ -18,6 +18,7 @@ enum class ResourceManagement {
 
 struct JaspToQIROptions {
     ResourceManagement resourceManagement = ResourceManagement::Static;
+    int64_t resultBufferSize = 64;
 
     bool isDynamic() const
     {
@@ -87,6 +88,10 @@ void populateQubitManagementPatterns(TypeConverter &converter,
                                      RewritePatternSet &patterns,
                                      const JaspToQIROptions &options,
                                      const JaspToQIRModuleInfo &moduleInfo);
+
+void populateQubitArrayOperationPatterns(TypeConverter &converter,
+                                         RewritePatternSet &patterns,
+                                         const JaspToQIROptions &options);
 
 void populateQuantumGatePatterns(TypeConverter &converter,
                                  RewritePatternSet &patterns);

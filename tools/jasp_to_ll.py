@@ -96,6 +96,7 @@ def convert(
     output_path: Path,
     keep_intermediates: bool = False,
     resource_management: str = "static",
+    result_buffer_size: int = 64,
 ) -> None:
     stem = output_path.with_suffix("")
     llvm_mlir = stem.with_suffix(".llvm.mlir")
@@ -106,7 +107,9 @@ def convert(
         run(
             JASP_OPT,
             input_path,
-            f"--lower-jasp-to-qir=resource-management={resource_management}",
+            "--lower-jasp-to-qir="
+            f"resource-management={resource_management} "
+            f"result-buffer-size={result_buffer_size}",
             "--canonicalize",
             "--convert-scf-to-cf",
             "--convert-cf-to-llvm",
@@ -143,6 +146,12 @@ def main() -> None:
         action="store_true",
         help="use dynamic runtime qubit/result allocation and arrays",
     )
+    parser.add_argument(
+        "--result-buffer-size",
+        type=int,
+        default=64,
+        help="reusable dynamic result slots (default: 64)",
+    )
     args = parser.parse_args()
 
     try:
@@ -151,6 +160,7 @@ def main() -> None:
             args.output,
             args.keep_intermediates,
             "dynamic" if args.dynamic else "static",
+            args.result_buffer_size,
         )
 
     except ValueError as error:

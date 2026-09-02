@@ -1,3 +1,5 @@
+#include <algorithm>
+
 #include "Jasp/IR/JaspOps.h"
 #include "JaspToQIRInternal.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
@@ -30,11 +32,26 @@ bool isSupportedJaspOp(Operation *operation)
                jasp_ir::ConsumeQuantumKernelOp,
                jasp_ir::CreateQubitsOp,
                jasp_ir::DeleteQubitsOp,
+               jasp_ir::FuseOp,
                jasp_ir::GetQubitOp,
                jasp_ir::GetSizeOp,
                jasp_ir::QuantumGateOp,
                jasp_ir::MeasureOp,
-               jasp_ir::ResetOp>(operation);
+               jasp_ir::ResetOp,
+               jasp_ir::SliceOp>(operation);
+}
+
+bool isQubitType(Type type)
+{
+    return isa<jasp_ir::QubitType, jasp_ir::QubitArrayType>(type);
+}
+
+int64_t normalizeSliceIndex(int64_t index, int64_t size)
+{
+    if (index < 0) {
+        index += size;
+    }
+    return std::clamp<int64_t>(index, 0, size);
 }
 
 LogicalResult prepareMain(ModuleOp module)
@@ -129,6 +146,7 @@ FailureOr<JaspToQIRModuleInfo>
 prepareJaspToQIRModule(ModuleOp module, const JaspToQIROptions &options)
 {
     JaspToQIRModuleInfo moduleInfo;
+    moduleInfo.features.hasBackwardsBranching = options.isDynamic();
     int64_t functionCount = 0;
     int64_t mainReturnCount = 0;
 
@@ -144,8 +162,17 @@ prepareJaspToQIRModule(ModuleOp module, const JaspToQIROptions &options)
             moduleInfo.features.hasFloatComputations |= containsFloat(type);
         }
 
-        if (isa<func::FuncOp>(operation)) {
+        if (auto function = dyn_cast<func::FuncOp>(operation)) {
             ++functionCount;
+            // prepareMain discards @main's source-level return values, so only
+            // qubit values escaping an emitted helper function are invalid.
+            if (options.isDynamic() && function.getSymName() != "main"
+                && llvm::any_of(function.getResultTypes(), isQubitType))
+            {
+                function.emitError(
+                    "dynamic QIR cannot return qubits backed by stack storage");
+                return WalkResult::interrupt();
+            }
         } else if (auto returnOp = dyn_cast<func::ReturnOp>(operation)) {
             if (returnOp->getParentOfType<func::FuncOp>().getSymName()
                 == "main")
@@ -157,21 +184,67 @@ prepareJaspToQIRModule(ModuleOp module, const JaspToQIROptions &options)
             if (!matchPattern(create.getAmount(),
                               m_ConstantInt(&numQubitsValue)))
             {
-                create.emitError(
-                    "QIR array backing storage requires a compile-time "
-                    "constant size");
+                if (!options.isDynamic()) {
+                    create.emitError(
+                        "static QIR resource management requires a "
+                        "compile-time constant qubit count");
+                    return WalkResult::interrupt();
+                }
+            } else {
+                int64_t count = numQubitsValue.getSExtValue();
+                moduleInfo.qubitArraySizes.try_emplace(create.getResult(),
+                                                       count);
+                if (!options.isDynamic()) {
+                    QubitArrayInfo allocation{moduleInfo.requiredQubits, count};
+                    moduleInfo.qubitAllocations.try_emplace(operation,
+                                                            allocation);
+                    moduleInfo.requiredQubits += count;
+                }
+            }
+        } else if (auto slice = dyn_cast<jasp_ir::SliceOp>(operation)) {
+            auto source = moduleInfo.qubitArraySizes.find(slice.getQbArray());
+            APInt startValue;
+            APInt endValue;
+            if (source != moduleInfo.qubitArraySizes.end()
+                && matchPattern(slice.getStart(), m_ConstantInt(&startValue))
+                && matchPattern(slice.getEnd(), m_ConstantInt(&endValue)))
+            {
+                int64_t start = normalizeSliceIndex(startValue.getSExtValue(),
+                                                    source->second);
+                int64_t end = normalizeSliceIndex(endValue.getSExtValue(),
+                                                  source->second);
+                moduleInfo.qubitArraySizes.try_emplace(
+                    slice.getResult(), std::max<int64_t>(end - start, 0));
+            }
+        } else if (auto fuse = dyn_cast<jasp_ir::FuseOp>(operation)) {
+            if (!options.isDynamic()) {
+                fuse.emitError(
+                    "jasp.fuse requires dynamic resource management");
                 return WalkResult::interrupt();
             }
 
-            int64_t count = numQubitsValue.getSExtValue();
-            QubitArrayInfo allocation{moduleInfo.requiredQubits, count};
-            moduleInfo.qubitAllocations.try_emplace(operation, allocation);
-            moduleInfo.qubitArraySizes.try_emplace(create.getResult(), count);
-            moduleInfo.requiredQubits += count;
+            auto operandSize = [&](Value operand) -> std::optional<int64_t> {
+                if (isa<jasp_ir::QubitType>(operand.getType())) {
+                    return 1;
+                }
+                auto iterator = moduleInfo.qubitArraySizes.find(operand);
+                if (iterator == moduleInfo.qubitArraySizes.end()) {
+                    return std::nullopt;
+                }
+                return iterator->second;
+            };
+            std::optional<int64_t> left = operandSize(fuse.getOperand1());
+            std::optional<int64_t> right = operandSize(fuse.getOperand2());
+            if (left && right) {
+                moduleInfo.qubitArraySizes.try_emplace(fuse.getResult(),
+                                                       *left + *right);
+            }
         } else if (auto measure = dyn_cast<jasp_ir::MeasureOp>(operation)) {
             int64_t count = 1;
             Value measuredValue = measure.getMeasQ();
-            if (isa<jasp_ir::QubitArrayType>(measuredValue.getType())) {
+            if (!options.isDynamic()
+                && isa<jasp_ir::QubitArrayType>(measuredValue.getType()))
+            {
                 auto iterator = moduleInfo.qubitArraySizes.find(measuredValue);
                 if (iterator == moduleInfo.qubitArraySizes.end()) {
                     measure.emitError("Could not statically determine size of "
@@ -183,7 +256,7 @@ prepareJaspToQIRModule(ModuleOp module, const JaspToQIROptions &options)
 
             MeasurementResultRange range{moduleInfo.requiredResults, count};
             moduleInfo.measurementResultRanges.try_emplace(operation, range);
-            moduleInfo.requiredResults += count;
+            moduleInfo.requiredResults += options.isDynamic() ? 1 : count;
         } else if (auto gate = dyn_cast<jasp_ir::QuantumGateOp>(operation)) {
             if (!isSupportedQuantumGate(gate.getGateType())) {
                 gate.emitError()

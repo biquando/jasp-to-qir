@@ -29,6 +29,7 @@ struct JaspToQIRPass final
     JaspToQIRPass(const JaspToQIRPass &other) : PassWrapper(other)
     {
         resourceManagement = other.resourceManagement;
+        resultBufferSize = other.resultBufferSize;
     }
 
     StringRef getArgument() const final { return "lower-jasp-to-qir"; }
@@ -42,6 +43,12 @@ struct JaspToQIRPass final
         "resource-management",
         llvm::cl::desc("QIR resource management mode: static or dynamic"),
         llvm::cl::init("static")};
+
+    Option<int64_t> resultBufferSize{
+        *this,
+        "result-buffer-size",
+        llvm::cl::desc("Number of reusable dynamic result slots"),
+        llvm::cl::init(64)};
 
     void runOnOperation() override
     {
@@ -62,7 +69,15 @@ struct JaspToQIRPass final
             return;
         }
 
-        lowering::JaspToQIROptions options{*parsedResourceManagement};
+        if (resultBufferSize <= 0) {
+            getOperation().emitError()
+                << "result-buffer-size must be greater than zero";
+            signalPassFailure();
+            return;
+        }
+
+        lowering::JaspToQIROptions options{*parsedResourceManagement,
+                                           resultBufferSize};
         FailureOr<lowering::JaspToQIRModuleInfo> moduleInfo =
             lowering::prepareJaspToQIRModule(getOperation(), options);
         if (failed(moduleInfo)) {
@@ -91,6 +106,8 @@ struct JaspToQIRPass final
         RewritePatternSet patterns(&context);
         lowering::populateQubitManagementPatterns(
             *converter, patterns, options, *moduleInfo);
+        lowering::populateQubitArrayOperationPatterns(
+            *converter, patterns, options);
         lowering::populateQuantumGatePatterns(*converter, patterns);
         lowering::populateMeasurementPatterns(
             *converter, patterns, options, *moduleInfo);

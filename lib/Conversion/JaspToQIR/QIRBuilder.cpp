@@ -1,7 +1,6 @@
 #include "QIRBuilder.h"
 
 #include "llvm/ADT/Twine.h"
-#include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/IR/BuiltinOps.h"
 
 using namespace mlir;
@@ -81,6 +80,18 @@ Value QIRBuilder::constantI64(int64_t value)
                                     builder.getI64IntegerAttr(value));
 }
 
+Value QIRBuilder::qubitArray(ResourceManagement resourceManagement,
+                             Value base,
+                             Value size)
+{
+    auto type = getQubitArrayType(builder.getContext(), resourceManagement);
+    Value array = LLVM::UndefOp::create(builder, location, type);
+    array = LLVM::InsertValueOp::create(
+        builder, location, array, base, ArrayRef<int64_t>{0});
+    return LLVM::InsertValueOp::create(
+        builder, location, array, size, ArrayRef<int64_t>{1});
+}
+
 Value QIRBuilder::outputLabel(int64_t index)
 {
     ModuleOp module = getEnclosingModule(builder);
@@ -113,12 +124,24 @@ void QIRBuilder::recordResult(Value result, int64_t outputIndex)
     call("__quantum__rt__result_record_output", ValueRange{result, label});
 }
 
+Value QIRBuilder::pointerAddress(Value buffer, Value index)
+{
+    Type pointerType = LLVM::LLVMPointerType::get(builder.getContext());
+    return LLVM::GEPOp::create(
+        builder, location, pointerType, pointerType, buffer, ValueRange{index});
+}
+
 Value QIRBuilder::pointerElement(Value buffer, Value index)
 {
     Type pointerType = LLVM::LLVMPointerType::get(builder.getContext());
-    Value address = LLVM::GEPOp::create(
-        builder, location, pointerType, pointerType, buffer, ValueRange{index});
+    Value address = pointerAddress(buffer, index);
     return LLVM::LoadOp::create(builder, location, pointerType, address, 8);
+}
+
+void QIRBuilder::storePointerElement(Value value, Value buffer, Value index)
+{
+    LLVM::StoreOp::create(
+        builder, location, value, pointerAddress(buffer, index), 8);
 }
 
 Value QIRBuilder::fixedPointerBuffer(int64_t count)
@@ -127,6 +150,13 @@ Value QIRBuilder::fixedPointerBuffer(int64_t count)
     Type arrayType = LLVM::LLVMArrayType::get(pointerType, count);
     return LLVM::AllocaOp::create(
         builder, location, pointerType, arrayType, constantI64(1), 8);
+}
+
+Value QIRBuilder::dynamicPointerBuffer(Value count)
+{
+    Type pointerType = LLVM::LLVMPointerType::get(builder.getContext());
+    return LLVM::AllocaOp::create(
+        builder, location, pointerType, pointerType, count, 8);
 }
 
 Value QIRBuilder::measureStaticQubit(Value qubit, int64_t resultId)
@@ -142,22 +172,6 @@ Value QIRBuilder::measureStaticQubit(Value qubit, int64_t resultId)
                 result,
                 TypeRange{builder.getI1Type()})
         .getResult();
-}
-
-Block *QIRBuilder::getFunctionEntry(Operation *operation)
-{
-    return &operation->getParentOfType<func::FuncOp>().getBody().front();
-}
-
-void QIRBuilder::releaseAtFunctionReturns(Operation *operation,
-                                          StringRef name,
-                                          ValueRange arguments)
-{
-    operation->getParentOfType<func::FuncOp>().walk(
-        [&](func::ReturnOp returnOp) {
-            OpBuilder builder(returnOp);
-            QIRBuilder(builder, returnOp.getLoc()).call(name, arguments);
-        });
 }
 
 } // namespace mlir::jasp::detail

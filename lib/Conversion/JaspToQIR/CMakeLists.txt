@@ -4,6 +4,7 @@ add_library(JaspToQIRPass STATIC
   ModulePreparation.cpp
   QIRBuilder.cpp
   QuantumGates.cpp
+  QubitArrayOperations.cpp
   QubitManagement.cpp
   Reset.cpp
   Scalarization.cpp
