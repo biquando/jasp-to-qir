@@ -19,9 +19,10 @@ QIR.
   do not add a build-time or runtime dependency on a `Qrisp/` checkout.
 - `lib/JaspOps.cpp` registers the generated dialect and implements its local
   semantic verifiers.
-- `lib/JaspToQIR.cpp` contains the typed Jasp lowering and rank-zero tensor
-  scalarization. It uses standard Func and SCF type-conversion patterns so Jasp
-  values can flow through calls and structured control flow.
+- `lib/Conversion/JaspToQIR/` contains the typed Jasp lowering, organized into
+  operation-family patterns, module preparation, type conversion, and QIR
+  builder utilities. It uses standard Func and SCF type-conversion patterns so
+  Jasp values can flow through calls and structured control flow.
 - `lib/FinalizeQIRLLVM.cpp` adds QIR declarations, function attributes, and
   entry-point initialization to the fully converted LLVM-dialect module.
 - `tools/jasp-to-qir.cpp` registers the generated dialect, the custom pass,
@@ -32,9 +33,10 @@ QIR.
 - `tools/qrisp_statevector.py` emits normalized state-vector JSON from an
   unmeasured Qrisp source program; `tools/qir_statevector.py` emits the same
   format by running QIR with Selene/QuEST.
-- `tests/generate_qrisp_fixtures.py` generates Jasp fixtures with Qrisp;
-  `tests/run_tests.py` regenerates them, runs structural regressions, and
-  compares Qrisp behavior with static and dynamic QIR.
+- `tests/run_tests.py` discovers the categorized `unittest` suite, while
+  `tests/support.py` owns shared conversion, validation, simulation, caching,
+  and reporting mechanics. `tests/generate_qrisp_fixtures.py` regenerates the
+  colocated `input.mlir` for every case that declares `qrisp_program`.
 
 ## Common commands
 
@@ -105,21 +107,26 @@ Use qir-runner to run a QIR file.
 
 ## Tests and fixtures
 
-- Add or modify Qrisp-based coverage in `tests/generate_qrisp_fixtures.py`,
-  then regenerate the checked-in fixtures under `tests/fixtures/qrisp/`. The
-  test runner regenerates into `tests/.tmp/` with isolated cache directories
-  and fails if checked-in fixtures are stale.
-- Add regression checks to `tests/run_tests.py` for every semantic bug fixed,
-  including expected failures for unsupported operations.
+- Group tests by purpose under `tests/validation/`, `tests/statevector/`,
+  `tests/semantics/`, `tests/diagnostics/`, `tests/driver/`, or
+  `tests/generation/`. Each program case owns a directory containing
+  `test_case.py` and `input.mlir`.
+- Add or modify a Qrisp-based case's `qrisp_program` in its `test_case.py`, then
+  regenerate its colocated checked-in `input.mlir` with
+  `tests/generate_qrisp_fixtures.py`. Fixture freshness is checked in isolated
+  cache and temporary directories.
+- Put shared test mechanics in `tests/support.py`, but keep case-specific
+  assertions and expected diagnostics in the owning `test_case.py`.
 - State-vector equivalence fixtures must not measure or reset. Return their
   live quantum values so Qrisp and Selene/QuEST can compare normalized dense
-  vectors in both static and dynamic modes. Register them in
-  `STATEVECTOR_CASES` with the simulator qubit capacity.
+  vectors in both static and dynamic modes. Pass the simulator qubit capacity
+  to `support.verify_statevector_case` from the case's test method.
 - Measurement equivalence fixtures may use reset, mid-circuit measurement, and
   measurement-controlled gates, but every explicit measurement outcome must be
-  deterministic and represented in the returned value. Register result widths
-  and an independently known expected bitstring in `MEASUREMENT_CASES`;
-  QubitArray integers expand least-significant-bit first.
+  deterministic and represented in the returned value. Pass result widths and
+  an independently known expected bitstring to
+  `support.verify_measurement_case`; QubitArray integers expand
+  least-significant-bit first.
 - The semantic suite uses `selene-sim`/QuEST for QIR execution because
   qir-runner does not link the dynamic array runtime APIs. Cross-simulator
   state vectors are compared after global-phase normalization with a `1e-6`
