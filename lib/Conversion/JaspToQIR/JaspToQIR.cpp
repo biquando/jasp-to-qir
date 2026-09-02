@@ -3,6 +3,7 @@
 #include "Jasp/IR/JaspOps.h"
 #include "JaspToQIRInternal.h"
 #include "llvm/Support/CommandLine.h"
+#include "mlir/Dialect/Math/IR/Math.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/Func/Transforms/FuncConversions.h"
@@ -90,6 +91,10 @@ struct JaspToQIRPass final
         ConversionTarget target(context);
         target.addLegalDialect<BuiltinDialect, LLVM::LLVMDialect>();
         target.addIllegalDialect<jasp_ir::JaspDialect, tensor::TensorDialect>();
+        target.addDynamicallyLegalDialect<math::MathDialect>(
+            [&](Operation *operation) {
+                return converter->isLegal(operation);
+            });
         target.addDynamicallyLegalDialect<arith::ArithDialect>(
             [&](Operation *operation) {
                 return converter->isLegal(operation);

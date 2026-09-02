@@ -114,6 +114,7 @@ def convert(
             "--inline",
             "--convert-scf-to-cf",
             "--convert-cf-to-llvm",
+            "--convert-math-to-llvm",
             "--convert-arith-to-llvm",
             "--convert-func-to-llvm",
             "--reconcile-unrealized-casts",

@@ -20,6 +20,7 @@ target_include_directories(JaspToQIRPass PRIVATE ${MLIR_INCLUDE_DIRS})
 target_link_libraries(JaspToQIRPass PUBLIC JaspDialect)
 mlir_target_link_libraries(JaspToQIRPass PUBLIC
   MLIRIR
+  MLIRMathDialect
   MLIRArithDialect
   MLIRLLVMDialect
   MLIRSCFDialect

@@ -26,6 +26,7 @@ constexpr GateSpec supportedGates[] = {
     {"rx", "__quantum__qis__rx__body", true},
     {"ry", "__quantum__qis__ry__body", true},
     {"rz", "__quantum__qis__rz__body", true},
+    {"p", "__quantum__qis__rz__body", true},
     {"cx", "__quantum__qis__cnot__body", false},
     {"cz", "__quantum__qis__cz__body", false},
 };

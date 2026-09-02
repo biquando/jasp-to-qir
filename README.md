@@ -67,8 +67,8 @@ measured at once, as well as the number of bits outputted with each measurement.
 
 Because of a limitation of Quantinuum's QIR, the following are not currently
 supported:
-- Helper functions that allocate/delete qubits
-- Helper functions that return qubits
+- Recursive helper functions
+- Helper functions that return qubits that they allocated
 
 ## Simulating a QIR program
 
