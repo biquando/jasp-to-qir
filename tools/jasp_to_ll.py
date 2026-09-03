@@ -90,6 +90,22 @@ def set_qir_module_flags(profile: QirProfile, llvm_ir: str) -> str:
 !12 = !{{{'!"double"' if profile.float_computations else ""}}}
 """
 
+# Changes the first two lines of the generated QIR from
+#   ; ModuleID = 'LLVMDialectModule'
+#   source_filename = "LLVMDialectModule"
+# to
+#   ; ModuleID = 'foo'
+#   source_filename = "foo.mlir"
+# This is kind of a hack, but there doesn't appear to be a way to set the module
+# name using mlir-translate.
+def set_qir_module_name(output_filename: str, input_filename: str, qir: str) -> str:
+    lines = qir.splitlines()
+    if lines[0] == "; ModuleID = 'LLVMDialectModule'":
+        lines[0] = f"; ModuleID = '{output_filename}'"
+    if lines[1] == 'source_filename = "LLVMDialectModule"':
+        lines[1] = f'source_filename = "{input_filename}"'
+    return '\n'.join(lines)
+
 def convert(
     input_path: Path,
     output_path: Path,
@@ -125,7 +141,10 @@ def convert(
 
         run(MLIR_TRANSLATE, "--mlir-to-llvmir", llvm_mlir, "-o", raw_llvm)
         with_module_flags = set_qir_module_flags(profile, raw_llvm.read_text())
-        output_path.write_text(with_module_flags)
+        with_module_name = set_qir_module_name(
+            str(output_path.name), str(input_path.name), with_module_flags
+        )
+        output_path.write_text(with_module_name)
     finally:
         if not keep_intermediates:
             for path in intermediates:

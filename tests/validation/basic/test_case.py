@@ -16,9 +16,6 @@ class BasicTest(support.ValidationTest):
 
     def test_conversion_and_validation(self) -> None:
         super().test_conversion_and_validation()
-        explicit = support.temp_dir() / "basic.explicit-static.ll"
-        support.run([sys.executable, support.DRIVER, self.case_dir / "input.mlir", explicit])
-        self.assertEqual(support.output(self.case_dir).read_bytes(), explicit.read_bytes())
         dynamic = support.require_contains(
             support.output(self.case_dir, "dynamic"),
             '!"dynamic_qubit_management", i1 true',
