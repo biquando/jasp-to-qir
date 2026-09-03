@@ -74,6 +74,7 @@ files.
 
 Use `--result-buffer-size` to configure the maximum amount of qubits that can be
 measured at once, as well as the number of bits outputted with each measurement.
+The default is 64.
 
 Because of a limitation of Quantinuum's QIR, the following are not currently
 supported:
@@ -82,14 +83,11 @@ supported:
 
 ## Simulating a QIR program
 
-Run a generated QIR file through qir-qis and Selene/QuEST for one shot:
+Run a generated QIR file through qir-qis and Selene/QuEST for ten shots:
 
 ```sh
-python tools/run_qir.py bell.ll 2
+python tools/run_qir.py bell.ll --qubits=2 --shots=10
 ```
-
-where `bell.ll` is the input QIR file, and `2` is the simulator's max qubit
-capacity.
 
 ## Testing
 
