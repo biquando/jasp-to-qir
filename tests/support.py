@@ -35,8 +35,8 @@ VALIDATOR = ROOT / "tools/validate_qir.py"
 GENERATOR = TESTS / "generate_qrisp_fixtures.py"
 QRISP_STATEVECTOR = ROOT / "tools/qrisp_statevector.py"
 QIR_STATEVECTOR = ROOT / "tools/qir_statevector.py"
-LLVM_BIN = Path(os.environ.get("LLVM_BIN", "/opt/homebrew/opt/llvm/bin"))
-OPT = LLVM_BIN / "opt"
+LLVM_BIN = os.environ.get("LLVM_BIN")
+OPT = Path(LLVM_BIN) / "opt" if LLVM_BIN else "opt"
 STATEVECTOR_TOLERANCE = 1e-6
 RESOURCE_MODES = ("static", "dynamic")
 

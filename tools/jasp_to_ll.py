@@ -90,14 +90,6 @@ def set_qir_module_flags(profile: QirProfile, llvm_ir: str) -> str:
 !12 = !{{{'!"double"' if profile.float_computations else ""}}}
 """
 
-# This is a hack to convert LLVM 23-style float literals:
-#   double f0x40041B2F769CF0E0
-# into QIR-QIS compatible float literals:
-#   double 0x40041B2F769CF0E0
-def postprocess_floats(input_qir: str) -> str:
-    return re.sub(r'(double\s+)f(0x[0-9a-fA-F]+)', r'\1\2', input_qir)
-
-
 def convert(
     input_path: Path,
     output_path: Path,
@@ -133,8 +125,7 @@ def convert(
 
         run(MLIR_TRANSLATE, "--mlir-to-llvmir", llvm_mlir, "-o", raw_llvm)
         with_module_flags = set_qir_module_flags(profile, raw_llvm.read_text())
-        with_float_postprocessing = postprocess_floats(with_module_flags)
-        output_path.write_text(with_float_postprocessing)
+        output_path.write_text(with_module_flags)
     finally:
         if not keep_intermediates:
             for path in intermediates:

@@ -5,6 +5,21 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 find_package(MLIR REQUIRED CONFIG)
+if(NOT LLVM_VERSION_MAJOR EQUAL 21)
+  message(FATAL_ERROR "LLVM 21 required, found LLVM ${LLVM_PACKAGE_VERSION}")
+endif()
+message(STATUS "Found MLIR at: ${MLIR_DIR}")
+message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}")
+message(STATUS "Found LLVM at: ${LLVM_DIR}")
+
+# Do not mix the MLIR component archives with the aggregate MLIR shared
+# library.  Some packaged MLIR targets (notably MLIRMlirOptMain) depend on the
+# shared library, so mixing them gives MLIR two copies of process-global state
+# and can crash while parsing attributes.
+if(TARGET MLIR)
+  set(MLIR_LINK_MLIR_DYLIB ON)
+endif()
+
 list(APPEND CMAKE_MODULE_PATH "${MLIR_CMAKE_DIR}")
 include(AddMLIR)
 include_directories(${MLIR_INCLUDE_DIRS} ${CMAKE_CURRENT_SOURCE_DIR}/include/Jasp/IR)

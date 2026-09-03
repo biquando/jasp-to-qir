@@ -43,9 +43,7 @@ QIR.
 Build with Homebrew LLVM/MLIR:
 
 ```sh
-cmake -S . -B build \
-  -DMLIR_DIR=/opt/homebrew/opt/llvm/lib/cmake/mlir \
-  -DLLVM_DIR=/opt/homebrew/opt/llvm/lib/cmake/llvm
+cmake -S . -B build -DMLIR_DIR=/opt/homebrew/opt/llvm@21/lib/cmake/mlir
 cmake --build build -j
 ```
 
@@ -56,15 +54,15 @@ python3 tools/jasp_to_ll.py input.mlir output.ll
 ./venv/bin/python tools/validate_qir.py output.ll
 ```
 
-Set `LLVM_BIN` if LLVM tools are not on `PATH`. Run all regressions with:
+Set `LLVM_BIN` if LLVM 21 is not on `PATH`. Run all regressions with:
 
 ```sh
 ./venv/bin/python tests/run_tests.py
 ```
 
-Use qir-runner to run a QIR file.
+Use `run_qir.py` to run a QIR file.
 ```sh
-./venv/bin/qir-runner -f <QIR file> -s <shots>
+python tools/run_qir.py <.ll file> <num_qubits>
 ```
 
 ## Implementation conventions
