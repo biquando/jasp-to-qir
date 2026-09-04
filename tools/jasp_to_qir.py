@@ -117,9 +117,10 @@ def convert(
     nojasp_mlir = stem.with_suffix(".1.nojasp.mlir")
     inline_mlir = stem.with_suffix(".2.inline.mlir")
     llvm_mlir = stem.with_suffix(".3.llvm.mlir")
-    raw_llvm = stem.with_suffix(".4.raw.ll")
+    qir_mlir = stem.with_suffix(".4.qir.mlir")
+    raw_llvm = stem.with_suffix(".5.raw.ll")
 
-    intermediates = (nojasp_mlir, inline_mlir, llvm_mlir, raw_llvm)
+    intermediates = (nojasp_mlir, inline_mlir, llvm_mlir, qir_mlir, raw_llvm)
     try:
         run(
             JASP_OPT,
@@ -149,18 +150,24 @@ def convert(
             "--convert-arith-to-llvm",
             "--convert-func-to-llvm",
             "--reconcile-unrealized-casts",
-            "--finalize-qir-llvm",
             "-o", llvm_mlir,
         )
-        profile = read_profile(llvm_mlir.read_text(encoding="utf-8"))
+
+        run(
+            JASP_OPT,
+            llvm_mlir,
+            "--finalize-qir-llvm",
+            "-o", qir_mlir,
+        )
 
         run(
             MLIR_TRANSLATE,
-            llvm_mlir,
+            qir_mlir,
             "--mlir-to-llvmir",
             "-o", raw_llvm,
         )
 
+        profile = read_profile(qir_mlir.read_text(encoding="utf-8"))
         with_module_flags = set_qir_module_flags(profile, raw_llvm.read_text())
         with_module_name = set_qir_module_name(
             str(output_path.name), str(input_path.name), with_module_flags
