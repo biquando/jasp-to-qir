@@ -56,17 +56,17 @@ Run your python program to output the MLIR file:
 python bell.py
 ```
 
-Convert Jasp MLIR to QIR with **static** qubit/result management and **no
-array** support, the default:
+Convert Jasp MLIR to QIR with **dynamic** qubit/result management and **array**
+support, the default:
 
 ```sh
 python tools/jasp_to_qir.py bell.mlir bell.ll
 ```
 
-Or emit QIR with **dynamic** qubit/result management and **array** support:
+Or emit QIR with **static** qubit/result management and **no array** support:
 
 ```sh
-python tools/jasp_to_qir.py --dynamic bell.mlir bell.ll
+python tools/jasp_to_qir.py --static bell.mlir bell.ll
 ```
 
 Use `--keep-intermediates` to retain the generated `.llvm.mlir` and `.raw.ll`

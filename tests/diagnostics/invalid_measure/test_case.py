@@ -10,4 +10,5 @@ class InvalidMeasureTest(unittest.TestCase):
             support.fixture(Path(__file__).parent),
             "requires result type 'tensor<i1>' for operand type '!jasp.Qubit'",
             support.temp_dir(),
+            mode="static",
         )

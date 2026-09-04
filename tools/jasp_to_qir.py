@@ -110,7 +110,7 @@ def convert(
     input_path: Path,
     output_path: Path,
     keep_intermediates: bool = False,
-    resource_management: str = "static",
+    resource_management: str = "dynamic",
     result_buffer_size: int = 64,
 ) -> None:
     stem = output_path.with_suffix("")
@@ -163,9 +163,9 @@ def main() -> None:
         help="retain generated .mlir and .raw.ll files",
     )
     parser.add_argument(
-        "--dynamic",
+        "--static",
         action="store_true",
-        help="use dynamic runtime qubit/result allocation and arrays",
+        help="use static qubit/result allocation",
     )
     parser.add_argument(
         "--result-buffer-size",
@@ -180,7 +180,7 @@ def main() -> None:
             args.input,
             args.output,
             args.keep_intermediates,
-            "dynamic" if args.dynamic else "static",
+            "static" if args.static else "dynamic",
             args.result_buffer_size,
         )
 

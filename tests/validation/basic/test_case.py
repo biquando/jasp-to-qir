@@ -37,7 +37,6 @@ class BasicTest(support.ValidationTest):
             [
                 sys.executable,
                 support.DRIVER,
-                "--dynamic",
                 "--result-buffer-size",
                 "7",
                 self.case_dir / "input.mlir",

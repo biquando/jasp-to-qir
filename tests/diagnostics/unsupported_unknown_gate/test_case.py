@@ -10,4 +10,5 @@ class UnsupportedUnknownGateTest(unittest.TestCase):
             support.fixture(Path(__file__).parent),
             "Unsupported Jasp gate 'unknown_gate'",
             support.temp_dir(),
+            mode="static",
         )

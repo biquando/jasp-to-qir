@@ -12,6 +12,7 @@ class DynamicAllocationTest(unittest.TestCase):
             "static QIR resource management requires a compile-time constant "
             "qubit count",
             support.temp_dir(),
+            mode="static",
         )
         output = support.convert_and_validate(
             fixture, "dynamic", support.temp_dir()

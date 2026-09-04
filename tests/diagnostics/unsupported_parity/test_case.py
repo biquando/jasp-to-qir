@@ -10,4 +10,5 @@ class UnsupportedParityTest(unittest.TestCase):
             support.fixture(Path(__file__).parent),
             "Unsupported Jasp operation 'jasp.parity'",
             support.temp_dir(),
+            mode="static",
         )

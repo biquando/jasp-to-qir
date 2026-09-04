@@ -10,4 +10,5 @@ class UnsupportedGphaseTest(unittest.TestCase):
             support.fixture(Path(__file__).parent),
             "Unsupported Jasp gate 'gphase'",
             support.temp_dir(),
+            mode="static",
         )

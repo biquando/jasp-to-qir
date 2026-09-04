@@ -212,15 +212,15 @@ def verify_qrisp_fixtures(temp: Path) -> None:
 def convert_and_validate(fixture: Path, mode: str, temp: Path) -> Path:
     """Convert one fixture, validate its QIR, and return the output path.
 
-    Static mode intentionally omits ``--dynamic`` so the suite also
-    protects the driver's documented default. Dynamic mode passes it explicitly.
+    Dynamic mode intentionally omits ``--static`` so the suite also
+    protects the driver's documented default. Static mode passes it explicitly.
     """
 
     category, case = fixture.relative_to(TESTS).parts[:2]
     output = temp / f"{category}-{case}.{mode}.ll"
     command: list[str | Path] = [sys.executable, DRIVER]
-    if mode == "dynamic":
-        command.extend(["--dynamic"])
+    if mode == "static":
+        command.extend(["--static"])
     command.extend([fixture, output])
     run(command)
     run([sys.executable, VALIDATOR, output])
@@ -727,14 +727,14 @@ def expect_conversion_failure(
     expected: str,
     temp: Path,
     *,
-    mode: str = "static",
+    mode: str,
 ) -> None:
     """Require conversion to fail cleanly with a specific diagnostic."""
 
     output = temp / f"invalid-{fixture.stem}-{mode}.ll"
     command: list[str | Path] = [sys.executable, DRIVER]
-    if mode == "dynamic":
-        command.extend(["--dynamic"])
+    if mode == "static":
+        command.extend(["--static"])
     command.extend([fixture, output])
     result = run(command, expect_failure=True)
     require(expected in result.stderr, f"{fixture.name}: missing error {expected!r}")
@@ -761,7 +761,6 @@ def verify_intermediates(case_dir: Path, temp: Path) -> None:
         stem.with_suffix(".llvm.mlir"),
         "llvm.call @__quantum__rt__initialize",
         'passthrough = ["entry_point"',
-        '["required_num_qubits", "2"]',
         "!llvm.ptr {llvm.writeonly}",
         "!llvm.ptr {llvm.readonly}",
         'passthrough = ["irreversible"]',

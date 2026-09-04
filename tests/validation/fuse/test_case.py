@@ -12,6 +12,7 @@ class FuseTest(unittest.TestCase):
             support.fixture(self.case_dir),
             "jasp.fuse requires dynamic resource management",
             support.temp_dir(),
+            mode="static",
         )
 
     def test_lowers_scalar_and_array_operands(self) -> None:
