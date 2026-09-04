@@ -1,4 +1,4 @@
-#include "JaspToQIR/JaspToQIR.h"
+#include "JaspToQIR/Transforms/FinalizeQIRLLVM/FinalizeQIRLLVM.h"
 
 #include "mlir/Dialect/LLVMIR/LLVMDialect.h"
 #include "mlir/IR/BuiltinOps.h"
@@ -254,6 +254,6 @@ struct FinalizeQIRLLVMPass final
 
 } // namespace
 
-std::unique_ptr<Pass> mlir::jasp::createFinalizeQIRLLVMPass() {
+std::unique_ptr<mlir::Pass> jasp_to_qir::createFinalizeQIRLLVMPass() {
   return std::make_unique<FinalizeQIRLLVMPass>();
 }

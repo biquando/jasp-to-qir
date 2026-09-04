@@ -1,10 +1,10 @@
-#include "Jasp/IR/JaspOps.h"
-#include "JaspToQIRInternal.h"
+#include "JaspToQIR/Dialect/Jasp/IR/JaspOps.h"
+#include "LowerJaspToQIRInternal.h"
 #include "QIRBuilder.h"
 
 using namespace mlir;
 
-namespace mlir::jasp::detail {
+namespace mlir::jasp::internal {
 
 namespace {
 
@@ -85,4 +85,4 @@ void populateQuantumGatePatterns(TypeConverter &converter,
     patterns.add<LowerQuantumGate>(converter, patterns.getContext());
 }
 
-} // namespace mlir::jasp::detail
+} // namespace mlir::jasp::internal

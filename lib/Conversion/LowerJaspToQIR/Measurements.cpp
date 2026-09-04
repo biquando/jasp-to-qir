@@ -1,7 +1,7 @@
 #include <cassert>
 
-#include "Jasp/IR/JaspOps.h"
-#include "JaspToQIRInternal.h"
+#include "JaspToQIR/Dialect/Jasp/IR/JaspOps.h"
+#include "LowerJaspToQIRInternal.h"
 #include "QIRBuilder.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/LLVMIR/LLVMDialect.h"
@@ -9,7 +9,7 @@
 
 using namespace mlir;
 
-namespace mlir::jasp::detail {
+namespace mlir::jasp::internal {
 
 namespace {
 
@@ -18,8 +18,8 @@ constexpr llvm::StringLiteral resultBufferGlobalName = "__jasp__result_buffer";
 struct LowerMeasure final : OpConversionPattern<::jasp::MeasureOp> {
     LowerMeasure(TypeConverter &converter,
                  MLIRContext *context,
-                 JaspToQIROptions options,
-                 const JaspToQIRModuleInfo &moduleInfo)
+                 LowerJaspToQIROptions options,
+                 const LowerJaspToQIRModuleInfo &moduleInfo)
         : OpConversionPattern(converter, context),
           options(options),
           moduleInfo(moduleInfo)
@@ -205,19 +205,19 @@ struct LowerMeasure final : OpConversionPattern<::jasp::MeasureOp> {
         });
     }
 
-    JaspToQIROptions options;
-    const JaspToQIRModuleInfo &moduleInfo;
+    LowerJaspToQIROptions options;
+    const LowerJaspToQIRModuleInfo &moduleInfo;
 };
 
 } // namespace
 
 void populateMeasurementPatterns(TypeConverter &converter,
                                  RewritePatternSet &patterns,
-                                 const JaspToQIROptions &options,
-                                 const JaspToQIRModuleInfo &moduleInfo)
+                                 const LowerJaspToQIROptions &options,
+                                 const LowerJaspToQIRModuleInfo &moduleInfo)
 {
     patterns.add<LowerMeasure>(
         converter, patterns.getContext(), options, moduleInfo);
 }
 
-} // namespace mlir::jasp::detail
+} // namespace mlir::jasp::internal

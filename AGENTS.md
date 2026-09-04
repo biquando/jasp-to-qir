@@ -14,20 +14,22 @@ QIR.
 
 ## Pipeline layout
 
-- `include/Jasp/IR/JaspDialect.td` and `JaspOps.td` are the vendored Qrisp
-  TableGen dialect definitions. CMake generates the C++ dialect at build time;
-  do not add a build-time or runtime dependency on a `Qrisp/` checkout.
-- `lib/JaspOps.cpp` registers the generated dialect and implements its local
-  semantic verifiers.
-- `lib/Conversion/JaspToQIR/` contains the typed Jasp lowering, organized into
-  operation-family patterns, module preparation, type conversion, and QIR
+- `include/JaspToQIR/Dialect/Jasp/IR/JaspDialect.td` and `JaspOps.td` are the
+  vendored Qrisp TableGen dialect definitions. CMake generates the C++ dialect
+  at build time; do not add a build-time or runtime dependency on a `Qrisp/`
+  checkout.
+- `lib/Dialect/Jasp/IR/JaspOps.cpp` registers the generated dialect and
+  implements its local semantic verifiers.
+- `lib/Conversion/LowerJaspToQIR/` contains the typed Jasp lowering, organized
+  into operation-family patterns, module preparation, type conversion, and QIR
   builder utilities. It uses standard Func and SCF type-conversion patterns so
   Jasp values can flow through calls and structured control flow.
-- `lib/FinalizeQIRLLVM.cpp` adds QIR declarations, function attributes, and
-  entry-point initialization to the fully converted LLVM-dialect module.
+- `lib/Transforms/FinalizeQIRLLVM/FinalizeQIRLLVM.cpp` adds QIR declarations,
+  function attributes, and entry-point initialization to the fully converted
+  LLVM-dialect module.
 - `tools/jasp-to-qir.cpp` registers the generated dialect, the custom pass,
   and standard MLIR passes for `mlir-opt`.
-- `tools/jasp_to_ll.py` runs the full pipeline, invokes `mlir-translate`, and
+- `tools/jasp_to_qir.py` runs the full pipeline, invokes `mlir-translate`, and
   replaces translator metadata with the required QIR module flags.
 - `tools/validate_qir.py` validates emitted QIR.
 - `tools/qrisp_statevector.py` emits normalized state-vector JSON from an
@@ -50,7 +52,7 @@ cmake --build build -j
 Convert and validate one input:
 
 ```sh
-python3 tools/jasp_to_ll.py input.mlir output.ll
+python3 tools/jasp_to_qir.py input.mlir output.ll
 ./venv/bin/python tools/validate_qir.py output.ll
 ```
 

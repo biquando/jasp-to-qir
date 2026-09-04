@@ -5,7 +5,7 @@
 
 using namespace mlir;
 
-namespace mlir::jasp::detail {
+namespace mlir::jasp::internal {
 
 namespace {
 
@@ -174,4 +174,4 @@ Value QIRBuilder::measureStaticQubit(Value qubit, int64_t resultId)
         .getResult();
 }
 
-} // namespace mlir::jasp::detail
+} // namespace mlir::jasp::internal

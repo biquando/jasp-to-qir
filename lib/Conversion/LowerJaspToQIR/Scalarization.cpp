@@ -1,10 +1,10 @@
-#include "JaspToQIRInternal.h"
+#include "LowerJaspToQIRInternal.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Tensor/IR/Tensor.h"
 
 using namespace mlir;
 
-namespace mlir::jasp::detail {
+namespace mlir::jasp::internal {
 
 namespace {
 
@@ -83,4 +83,4 @@ void populateScalarizationPatterns(TypeConverter &converter,
         converter, patterns.getContext());
 }
 
-} // namespace mlir::jasp::detail
+} // namespace mlir::jasp::internal

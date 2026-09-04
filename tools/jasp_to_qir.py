@@ -127,6 +127,8 @@ def convert(
             f"result-buffer-size={result_buffer_size}",
             "--canonicalize",
             "--inline",
+            "--canonicalize",
+            "--symbol-dce",
             "--convert-scf-to-cf",
             "--convert-cf-to-llvm",
             "--convert-math-to-llvm",

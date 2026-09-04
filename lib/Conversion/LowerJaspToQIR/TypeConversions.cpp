@@ -1,16 +1,16 @@
-#include "Jasp/IR/JaspOps.h"
-#include "JaspToQIRInternal.h"
+#include "JaspToQIR/Dialect/Jasp/IR/JaspOps.h"
+#include "LowerJaspToQIRInternal.h"
 #include "QIRBuilder.h"
 #include "mlir/Dialect/LLVMIR/LLVMDialect.h"
 #include "mlir/IR/BuiltinTypes.h"
 
 using namespace mlir;
 
-namespace mlir::jasp::detail {
+namespace mlir::jasp::internal {
 
 std::unique_ptr<TypeConverter>
-createJaspToQIRTypeConverter(MLIRContext &context,
-                             const JaspToQIROptions &options)
+createLowerJaspToQIRTypeConverter(MLIRContext &context,
+                             const LowerJaspToQIROptions &options)
 {
     auto converter = std::make_unique<TypeConverter>();
 
@@ -44,4 +44,4 @@ createJaspToQIRTypeConverter(MLIRContext &context,
     return converter;
 }
 
-} // namespace mlir::jasp::detail
+} // namespace mlir::jasp::internal

@@ -1,5 +1,5 @@
-#include "Jasp/IR/JaspOps.h"
-#include "JaspToQIRInternal.h"
+#include "JaspToQIR/Dialect/Jasp/IR/JaspOps.h"
+#include "LowerJaspToQIRInternal.h"
 #include "QIRBuilder.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/LLVMIR/LLVMDialect.h"
@@ -7,7 +7,7 @@
 
 using namespace mlir;
 
-namespace mlir::jasp::detail {
+namespace mlir::jasp::internal {
 
 namespace {
 
@@ -45,8 +45,8 @@ struct LowerConsumeQuantumKernel final
 struct LowerCreateQubits final : OpConversionPattern<jasp_ir::CreateQubitsOp> {
     LowerCreateQubits(TypeConverter &converter,
                       MLIRContext *context,
-                      JaspToQIROptions options,
-                      const JaspToQIRModuleInfo &moduleInfo)
+                      LowerJaspToQIROptions options,
+                      const LowerJaspToQIRModuleInfo &moduleInfo)
         : OpConversionPattern(converter, context),
           options(options),
           moduleInfo(moduleInfo)
@@ -111,14 +111,14 @@ struct LowerCreateQubits final : OpConversionPattern<jasp_ir::CreateQubitsOp> {
     }
 
   private:
-    JaspToQIROptions options;
-    const JaspToQIRModuleInfo &moduleInfo;
+    LowerJaspToQIROptions options;
+    const LowerJaspToQIRModuleInfo &moduleInfo;
 };
 
 struct LowerDeleteQubits final : OpConversionPattern<jasp_ir::DeleteQubitsOp> {
     LowerDeleteQubits(TypeConverter &converter,
                       MLIRContext *context,
-                      JaspToQIROptions options)
+                      LowerJaspToQIROptions options)
         : OpConversionPattern(converter, context),
           options(options)
     {}
@@ -168,15 +168,15 @@ struct LowerDeleteQubits final : OpConversionPattern<jasp_ir::DeleteQubitsOp> {
     }
 
   private:
-    JaspToQIROptions options;
+    LowerJaspToQIROptions options;
 };
 
 } // namespace
 
 void populateQubitManagementPatterns(TypeConverter &converter,
                                      RewritePatternSet &patterns,
-                                     const JaspToQIROptions &options,
-                                     const JaspToQIRModuleInfo &moduleInfo)
+                                     const LowerJaspToQIROptions &options,
+                                     const LowerJaspToQIRModuleInfo &moduleInfo)
 {
     MLIRContext *context = patterns.getContext();
     patterns.add<LowerCreateQuantumKernel, LowerConsumeQuantumKernel>(converter,
@@ -185,4 +185,4 @@ void populateQubitManagementPatterns(TypeConverter &converter,
     patterns.add<LowerDeleteQubits>(converter, context, options);
 }
 
-} // namespace mlir::jasp::detail
+} // namespace mlir::jasp::internal

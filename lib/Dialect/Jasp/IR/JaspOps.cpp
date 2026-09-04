@@ -1,4 +1,4 @@
-#include "Jasp/IR/JaspOps.h"
+#include "JaspToQIR/Dialect/Jasp/IR/JaspOps.h"
 
 #include "mlir/IR/DialectImplementation.h"
 

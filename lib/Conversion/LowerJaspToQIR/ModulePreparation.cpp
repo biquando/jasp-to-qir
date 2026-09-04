@@ -1,7 +1,7 @@
 #include <algorithm>
 
-#include "Jasp/IR/JaspOps.h"
-#include "JaspToQIRInternal.h"
+#include "JaspToQIR/Dialect/Jasp/IR/JaspOps.h"
+#include "LowerJaspToQIRInternal.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/SCF/IR/SCF.h"
@@ -9,7 +9,7 @@
 
 using namespace mlir;
 
-namespace mlir::jasp::detail {
+namespace mlir::jasp::internal {
 
 namespace {
 
@@ -82,8 +82,8 @@ LogicalResult prepareMain(ModuleOp module)
 }
 
 void setModuleAttributes(ModuleOp module,
-                         const JaspToQIROptions &options,
-                         const JaspToQIRModuleInfo &moduleInfo)
+                         const LowerJaspToQIROptions &options,
+                         const LowerJaspToQIRModuleInfo &moduleInfo)
 {
     MLIRContext *context = module.getContext();
     Type i64 = IntegerType::get(context, 64);
@@ -142,10 +142,10 @@ stringifyResourceManagement(ResourceManagement resourceManagement)
     llvm_unreachable("unknown resource management mode");
 }
 
-FailureOr<JaspToQIRModuleInfo>
-prepareJaspToQIRModule(ModuleOp module, const JaspToQIROptions &options)
+FailureOr<LowerJaspToQIRModuleInfo>
+prepareLowerJaspToQIRModule(ModuleOp module, const LowerJaspToQIROptions &options)
 {
-    JaspToQIRModuleInfo moduleInfo;
+    LowerJaspToQIRModuleInfo moduleInfo;
     moduleInfo.features.hasBackwardsBranching = options.isDynamic();
     int64_t functionCount = 0;
     int64_t mainReturnCount = 0;
@@ -285,4 +285,4 @@ prepareJaspToQIRModule(ModuleOp module, const JaspToQIROptions &options)
     return moduleInfo;
 }
 
-} // namespace mlir::jasp::detail
+} // namespace mlir::jasp::internal

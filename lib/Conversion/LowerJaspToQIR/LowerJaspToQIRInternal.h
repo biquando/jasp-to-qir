@@ -9,14 +9,14 @@
 #include "mlir/IR/BuiltinOps.h"
 #include "mlir/Transforms/DialectConversion.h"
 
-namespace mlir::jasp::detail {
+namespace mlir::jasp::internal {
 
 enum class ResourceManagement {
     Static,
     Dynamic,
 };
 
-struct JaspToQIROptions {
+struct LowerJaspToQIROptions {
     ResourceManagement resourceManagement = ResourceManagement::Static;
     int64_t resultBufferSize = 64;
 
@@ -46,7 +46,7 @@ struct QIRModuleFeatures {
 
 /// Facts established before dialect conversion and consumed by lowering
 /// patterns or by the final QIR module annotation step.
-struct JaspToQIRModuleInfo {
+struct LowerJaspToQIRModuleInfo {
     int64_t requiredQubits = 0;
     int64_t requiredResults = 0;
     QIRModuleFeatures features;
@@ -75,37 +75,37 @@ parseResourceManagement(llvm::StringRef value);
 llvm::StringRef
 stringifyResourceManagement(ResourceManagement resourceManagement);
 
-FailureOr<JaspToQIRModuleInfo>
-prepareJaspToQIRModule(ModuleOp module, const JaspToQIROptions &options);
+FailureOr<LowerJaspToQIRModuleInfo>
+prepareLowerJaspToQIRModule(ModuleOp module, const LowerJaspToQIROptions &options);
 
 std::unique_ptr<TypeConverter>
-createJaspToQIRTypeConverter(MLIRContext &context,
-                             const JaspToQIROptions &options);
+createLowerJaspToQIRTypeConverter(MLIRContext &context,
+                             const LowerJaspToQIROptions &options);
 
 bool isSupportedQuantumGate(llvm::StringRef name);
 
 void populateQubitManagementPatterns(TypeConverter &converter,
                                      RewritePatternSet &patterns,
-                                     const JaspToQIROptions &options,
-                                     const JaspToQIRModuleInfo &moduleInfo);
+                                     const LowerJaspToQIROptions &options,
+                                     const LowerJaspToQIRModuleInfo &moduleInfo);
 
 void populateQubitArrayOperationPatterns(TypeConverter &converter,
                                          RewritePatternSet &patterns,
-                                         const JaspToQIROptions &options);
+                                         const LowerJaspToQIROptions &options);
 
 void populateQuantumGatePatterns(TypeConverter &converter,
                                  RewritePatternSet &patterns);
 
 void populateMeasurementPatterns(TypeConverter &converter,
                                  RewritePatternSet &patterns,
-                                 const JaspToQIROptions &options,
-                                 const JaspToQIRModuleInfo &moduleInfo);
+                                 const LowerJaspToQIROptions &options,
+                                 const LowerJaspToQIRModuleInfo &moduleInfo);
 
 void populateResetPatterns(TypeConverter &converter,
                            RewritePatternSet &patterns,
-                           const JaspToQIROptions &options);
+                           const LowerJaspToQIROptions &options);
 
 void populateScalarizationPatterns(TypeConverter &converter,
                                    RewritePatternSet &patterns);
 
-} // namespace mlir::jasp::detail
+} // namespace mlir::jasp::internal
