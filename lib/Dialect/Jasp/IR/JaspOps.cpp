@@ -21,16 +21,3 @@ void jasp::JaspDialect::initialize() {
 #include "JaspOps.cpp.inc"
       >();
 }
-
-mlir::LogicalResult jasp::MeasureOp::verify() {
-  mlir::Type expected = mlir::isa<jasp::QubitType>(getMeasQ().getType())
-                            ? mlir::RankedTensorType::get(
-                                  {}, mlir::IntegerType::get(getContext(), 1))
-                            : mlir::RankedTensorType::get(
-                                  {}, mlir::IntegerType::get(getContext(), 64));
-  if (getMeasRes().getType() != expected) {
-    return emitOpError() << "requires result type " << expected
-                         << " for operand type " << getMeasQ().getType();
-  }
-  return mlir::success();
-}

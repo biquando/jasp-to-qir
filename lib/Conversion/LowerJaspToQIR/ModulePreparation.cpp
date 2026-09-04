@@ -164,15 +164,6 @@ prepareLowerJaspToQIRModule(ModuleOp module, const LowerJaspToQIROptions &option
 
         if (auto function = dyn_cast<func::FuncOp>(operation)) {
             ++functionCount;
-            // prepareMain discards @main's source-level return values, so only
-            // qubit values escaping an emitted helper function are invalid.
-            if (options.isDynamic() && function.getSymName() != "main"
-                && llvm::any_of(function.getResultTypes(), isQubitType))
-            {
-                function.emitError(
-                    "dynamic QIR cannot return qubits backed by stack storage");
-                return WalkResult::interrupt();
-            }
         } else if (auto returnOp = dyn_cast<func::ReturnOp>(operation)) {
             if (returnOp->getParentOfType<func::FuncOp>().getSymName()
                 == "main")
