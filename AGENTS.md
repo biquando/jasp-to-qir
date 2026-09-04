@@ -80,9 +80,9 @@ python tools/run_qir.py <.ll file> <num_qubits>
 - QIR ABI details matter: use supported QIS/runtime declarations, required
   module flags, entry-point attributes, and correct function attributes for
   irreversible measurement operations.
-- Static resource management is the driver default and uses consecutive QIR
-  resource handles. Dynamic mode is selected with
-  `--resource-management dynamic` and uses the Adaptive Profile's optional
+- Dynamic resource management is the driver default and uses consecutive QIR
+  resource handles. Static mode is selected with
+  `--resource-management static` and uses the Adaptive Profile's optional
   qubit/result allocation and array APIs.
 - Dynamic `jasp.create_qubits` creates a runtime-sized stack buffer and fills it
   in an SCF loop with calls to `__quantum__rt__qubit_allocate`. Explicit
@@ -119,9 +119,8 @@ python tools/run_qir.py <.ll file> <num_qubits>
 ## Tests and fixtures
 
 - Group tests by purpose under `tests/validation/`, `tests/statevector/`,
-  `tests/semantics/`, `tests/diagnostics/`, `tests/driver/`, or
-  `tests/generation/`. Each program case owns a directory containing
-  `test_case.py` and `input.mlir`.
+  `tests/semantics/`, `tests/diagnostics/`, or `tests/generation/`. Each program
+  case owns a directory containing `test_case.py` and `input.mlir`.
 - Add or modify a Qrisp-based case's `qrisp_program` in its `test_case.py`, then
   regenerate its colocated checked-in `input.mlir` with
   `tests/generate_qrisp_fixtures.py`. Fixture freshness is checked in isolated
@@ -147,7 +146,4 @@ python tools/run_qir.py <.ll file> <num_qubits>
   `tests/results/semantic_results.txt`, containing Qrisp, static-QIR, and
   dynamic-QIR amplitudes or bitstrings side by side. Do not move retained Selene
   build artifacts out of `tests/.tmp/`.
-- Run the full test script after pipeline changes. It validates each generated
-  `.ll` file and also checks the intermediate-file option. With
-  `--keep-intermediates`, the driver retains only `.llvm.mlir` and `.raw.ll`;
-  the removed generic and post-Jasp stages are no longer emitted.
+- Run the full test script after pipeline changes.

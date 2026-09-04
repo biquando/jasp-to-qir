@@ -69,8 +69,7 @@ Or emit QIR with **static** qubit/result management and **no array** support:
 python tools/jasp_to_qir.py --static bell.mlir bell.ll
 ```
 
-Use `--keep-intermediates` to retain the generated `.llvm.mlir` and `.raw.ll`
-files.
+Use `--keep-intermediates` to retain the generated intermediate files.
 
 Use `--result-buffer-size` to configure the maximum amount of qubits that can be
 measured at once, as well as the number of bits outputted with each measurement.
@@ -83,7 +82,7 @@ supported:
 
 ## Simulating a QIR program
 
-Run a generated QIR file through qir-qis and Selene/QuEST for ten shots:
+Run a generated QIR file through qir-qis and Selene/QuEST:
 
 ```sh
 python tools/run_qir.py bell.ll --qubits=2 --shots=10

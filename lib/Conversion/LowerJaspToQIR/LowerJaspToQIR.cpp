@@ -43,7 +43,7 @@ struct LowerJaspToQIRPass final
         *this,
         "resource-management",
         llvm::cl::desc("QIR resource management mode: static or dynamic"),
-        llvm::cl::init("static")};
+        llvm::cl::init("dynamic")};
 
     Option<int64_t> resultBufferSize{
         *this,

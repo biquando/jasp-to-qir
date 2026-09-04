@@ -50,6 +50,9 @@ There are four stages to the pipeline:
    module in order to make it QIR-compliant (besides the module flags, which are
    added to the actual `.ll` file in post-processing).
 
+Use `tools/jasp_to_qir.py --keep-intermediates` to keep the intermediate files
+generated between each stage.
+
 ## Source files
 
 | Path | Description |

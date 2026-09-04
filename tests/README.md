@@ -7,8 +7,8 @@ purpose:
   properties of their emitted QIR.
 - `statevector/` compares unmeasured programs with Qrisp and Selene/QuEST.
 - `semantics/` compares deterministic measurement behavior.
-- `diagnostics/`, `driver/`, and `generation/` cover expected failures,
-  command-line behavior, and checked-in fixture freshness.
+- `diagnostics/`, and `generation/` cover expected failures, and checked-in
+  fixture freshness.
 
 Each case owns a directory containing `test_case.py` and `input.mlir`. For
 Qrisp-based cases, `test_case.py` also contains `qrisp_program` and its semantic

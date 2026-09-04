@@ -114,10 +114,12 @@ def convert(
     result_buffer_size: int = 64,
 ) -> None:
     stem = output_path.with_suffix("")
-    llvm_mlir = stem.with_suffix(".llvm.mlir")
-    raw_llvm = stem.with_suffix(".raw.ll")
+    nojasp_mlir = stem.with_suffix(".1.nojasp.mlir")
+    inline_mlir = stem.with_suffix(".2.inline.mlir")
+    llvm_mlir = stem.with_suffix(".3.llvm.mlir")
+    raw_llvm = stem.with_suffix(".4.raw.ll")
 
-    intermediates = (llvm_mlir, raw_llvm)
+    intermediates = (nojasp_mlir, inline_mlir, llvm_mlir, raw_llvm)
     try:
         run(
             JASP_OPT,
@@ -125,8 +127,20 @@ def convert(
             "--lower-jasp-to-qir="
             f"resource-management={resource_management} "
             f"result-buffer-size={result_buffer_size}",
+            "-o", nojasp_mlir,
+        )
+
+        run(
+            JASP_OPT,
+            nojasp_mlir,
             "--canonicalize",
             "--inline",
+            "-o", inline_mlir,
+        )
+
+        run(
+            JASP_OPT,
+            inline_mlir,
             "--canonicalize",
             "--symbol-dce",
             "--convert-scf-to-cf",
@@ -136,12 +150,17 @@ def convert(
             "--convert-func-to-llvm",
             "--reconcile-unrealized-casts",
             "--finalize-qir-llvm",
-            "-o",
-            llvm_mlir,
+            "-o", llvm_mlir,
         )
         profile = read_profile(llvm_mlir.read_text(encoding="utf-8"))
 
-        run(MLIR_TRANSLATE, "--mlir-to-llvmir", llvm_mlir, "-o", raw_llvm)
+        run(
+            MLIR_TRANSLATE,
+            llvm_mlir,
+            "--mlir-to-llvmir",
+            "-o", raw_llvm,
+        )
+
         with_module_flags = set_qir_module_flags(profile, raw_llvm.read_text())
         with_module_name = set_qir_module_name(
             str(output_path.name), str(input_path.name), with_module_flags
@@ -160,7 +179,7 @@ def main() -> None:
     parser.add_argument(
         "--keep-intermediates",
         action="store_true",
-        help="retain generated .mlir and .raw.ll files",
+        help="retain generated intermediate files",
     )
     parser.add_argument(
         "--static",
