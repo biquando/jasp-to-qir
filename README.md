@@ -75,10 +75,8 @@ Use `--result-buffer-size` to configure the maximum amount of qubits that can be
 measured at once, as well as the number of bits outputted with each measurement.
 The default is 64.
 
-Because of a limitation of Quantinuum's QIR, the following are not currently
-supported:
-- Recursive helper functions
-- Helper functions that return qubits that they allocated
+Because of a limitation of Quantinuum's QIR, recursive functions are not
+currently supported.
 
 ## Simulating a QIR program
 

@@ -71,6 +71,52 @@ struct LowerCtpop : OpRewritePattern<math::CtPopOp> {
     }
 };
 
+struct LowerPowf : OpRewritePattern<math::PowFOp> {
+    using OpRewritePattern::OpRewritePattern;
+
+    LogicalResult matchAndRewrite(math::PowFOp op,
+                                  PatternRewriter &rewriter) const override {
+        // Match:
+        //   %base = arith.constant 2.0
+        auto constantOp = op.getLhs().getDefiningOp<arith::ConstantOp>();
+        if (!constantOp) {
+            return failure();
+        }
+
+        auto floatAttr = dyn_cast<FloatAttr>(constantOp.getValue());
+        if (!floatAttr || !floatAttr.getValue().isExactlyValue(2.0)) {
+            return failure();
+        }
+
+        // Match:
+        //   %exp_fp = arith.sitofp %exp
+        auto sitofp = op.getRhs().getDefiningOp<arith::SIToFPOp>();
+        if (!sitofp) {
+            return failure();
+        }
+
+        Value exponent = sitofp.getIn();
+        auto intType = dyn_cast<IntegerType>(exponent.getType());
+        if (!intType) {
+            return failure();
+        }
+
+        Location loc = op.getLoc();
+
+        // Compute 2^exponent as:
+        //   1 << exponent
+        Value one = rewriter.create<arith::ConstantIntOp>(loc, 1, intType.getWidth());
+        Value shifted = arith::ShLIOp::create(rewriter, loc, one, exponent);
+
+        // Interpret the shifted value as unsigned. This matters for exponent
+        // width-1, where the high bit is set.
+        Value result = arith::UIToFPOp::create(rewriter, loc, op.getType(), shifted);
+
+        rewriter.replaceOp(op, result);
+        return success();
+    }
+};
+
 struct MathForQIRPass final
     : PassWrapper<MathForQIRPass, OperationPass<ModuleOp>> {
     MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(MathForQIRPass)
@@ -86,11 +132,11 @@ struct MathForQIRPass final
 
         RewritePatternSet patterns(ctx);
         patterns.add<LowerCtpop>(ctx);
-        // patterns.add<LowerPowf>(ctx); TODO:
+        patterns.add<LowerPowf>(ctx);
 
         ConversionTarget target(*ctx);
         target.addIllegalOp<math::CtPopOp>();
-        // target.addIllegalOp<math::PowFOp>(); TODO:
+        target.addIllegalOp<math::PowFOp>();
 
         target.markUnknownOpDynamicallyLegal([](Operation *) { return true; });
 
