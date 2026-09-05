@@ -5,6 +5,7 @@ Qrisp/Jasp-generated MLIR code to QIR. This document gives an outline of the
 pipeline. The detailed descriptions of each custom lowering pass are in:
 
 - [`Conversion/LowerJaspToQIR/README.md`](Conversion/LowerJaspToQIR/README.md)
+- [`Conversion/MathForQIR/README.md`](Conversion/MathForQIR/README.md)
 - [`Transforms/FinalizeQIRLLVM/README.md`](Transforms/FinalizeQIRLLVM/README.md)
 
 ## Lowering passes
@@ -22,6 +23,11 @@ LLVM-dialect QIR calls mixed with func/scf/math/arith
 Inlined MLIR functions
   |
   | --canonicalize
+  | --convert-math-for-qir (lib/Conversion/MathForQIR)
+  v
+Certain math operations lowered for QIR compatibility
+  |
+  | --canonicalize
   | --symbol-dce
   | --convert-scf-to-cf
   | --convert-cf-to-llvm
@@ -37,7 +43,7 @@ LLVM-dialect only
 QIR-compliant LLVM-dialect module (ready for mlir-translate)
 ```
 
-There are four stages to the pipeline:
+There are five stages to the pipeline:
 1. Jasp's `jaspr.to_mlir(lower_stablehlo=True)` gives MLIR code that contains
    the custom Jasp dialect, as well as func/scf/math/arith/tensor dialects. The
    first custom pass (`--lower-jasp-to-qir`) converts the Jasp-dialect
@@ -45,10 +51,13 @@ There are four stages to the pipeline:
 2. Quantinuum has an undocumented restriction: qubits cannot be allocated inside
    helper functions. To get around this, we inline all functions on the MLIR
    level.
-3. We lower func/scf/math/arith down to LLVM-dialect to prepare for QIR output.
-4. This is the second custom pass. We make some small modifications to the
-   module in order to make it QIR-compliant (besides the module flags, which are
-   added to the actual `.ll` file in post-processing).
+3. This is the second custom pass.Some math operations emitted by Jasp lower to
+   `llvm.intr.*` operations, which are not supported by QIR. We add a new pass
+   that lowers these operations specifically.
+4. We lower func/scf/math/arith down to LLVM-dialect to prepare for QIR output.
+5. This is the third custom pass. We make some small modifications to the module
+   in order to make it QIR-compliant (besides the module flags, which are added
+   to the actual `.ll` file in post-processing).
 
 Use `tools/jasp_to_qir.py --keep-intermediates` to keep the intermediate files
 generated between each stage.
@@ -60,6 +69,7 @@ generated between each stage.
 | `tools/jasp_to_qir.py`                         | Python wrapper for the lowering pipeline. |
 | `tools/jasp-to-qir.cpp`                        | Main module: registers passes and dialects. |
 | `include/JaspToQIR/Conversion/LowerJaspToQIR`  | Public interface for the Jasp lowering pass. |
+| `include/JaspToQIR/Conversion/MathForQIR`      | Public interface for the Math compatibility pass. |
 | `include/JaspToQIR/Transforms/FinalizeQIRLLVM` | Public interface for the QIR finalization pass. |
 | `include/JaspToQIR/Dialect/Jasp/IR`            | Vendored TableGen definitions and public Jasp dialect header. |
 | `lib/Dialect/Jasp/IR`                          | Registers the generated Jasp operations and types. |

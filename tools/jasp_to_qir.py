@@ -116,11 +116,12 @@ def convert(
     stem = output_path.with_suffix("")
     nojasp_mlir = stem.with_suffix(".1.nojasp.mlir")
     inline_mlir = stem.with_suffix(".2.inline.mlir")
-    llvm_mlir = stem.with_suffix(".3.llvm.mlir")
-    qir_mlir = stem.with_suffix(".4.qir.mlir")
-    raw_llvm = stem.with_suffix(".5.raw.ll")
+    qirmath_mlir = stem.with_suffix(".3.qirmath.mlir")
+    llvm_mlir = stem.with_suffix(".4.llvm.mlir")
+    qir_mlir = stem.with_suffix(".5.qir.mlir")
+    raw_llvm = stem.with_suffix(".6.raw.ll")
 
-    intermediates = (nojasp_mlir, inline_mlir, llvm_mlir, qir_mlir, raw_llvm)
+    intermediates = (nojasp_mlir, inline_mlir, qirmath_mlir, llvm_mlir, qir_mlir, raw_llvm)
     try:
         run(
             JASP_OPT,
@@ -142,6 +143,14 @@ def convert(
         run(
             JASP_OPT,
             inline_mlir,
+            "--canonicalize",
+            "--convert-math-for-qir",
+            "-o", qirmath_mlir
+        )
+
+        run(
+            JASP_OPT,
+            qirmath_mlir,
             "--canonicalize",
             "--symbol-dce",
             "--convert-scf-to-cf",
