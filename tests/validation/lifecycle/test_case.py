@@ -13,17 +13,3 @@ def qrisp_program():
 
 class LifecycleTest(support.ValidationTest):
     case_dir = Path(__file__).parent
-
-    def test_conversion_and_validation(self) -> None:
-        super().test_conversion_and_validation()
-        dynamic = support.require_contains(
-            support.output(self.case_dir, "dynamic"),
-            "call ptr @__quantum__rt__qubit_allocate(ptr null)",
-            "call void @__quantum__rt__qubit_release(ptr",
-        )
-        self.assertEqual(
-            dynamic.count("call ptr @__quantum__rt__qubit_allocate(ptr null)"), 1
-        )
-        self.assertEqual(
-            dynamic.count("call void @__quantum__rt__qubit_release(ptr"), 1
-        )

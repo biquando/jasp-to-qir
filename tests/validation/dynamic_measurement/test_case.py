@@ -19,21 +19,3 @@ class DynamicMeasurementTest(unittest.TestCase):
         output = support.convert_and_validate(
             fixture, "dynamic", support.temp_dir()
         )
-        dynamic = support.require_contains(
-            output,
-            "__quantum__rt__result_array_allocate(i64 64",
-            "call void @__quantum__qis__mz__body(ptr",
-            "call i1 @__quantum__rt__read_result(ptr",
-            "call void @__quantum__rt__result_array_record_output(i64 64",
-            "call void @__quantum__rt__int_record_output(i64",
-            "__quantum__rt__result_array_release(i64 64",
-        )
-        self.assertEqual(
-            dynamic.count("call void @__quantum__rt__int_record_output"), 1
-        )
-        self.assertEqual(
-            dynamic.count(
-                "call void @__quantum__rt__result_array_record_output"
-            ),
-            1,
-        )

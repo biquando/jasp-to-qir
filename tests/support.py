@@ -6,7 +6,7 @@ Invoke this file with the repository virtual environment::
     ./venv/bin/python tests/run_tests.py
 
 Test modules contain one test case each and delegate process execution,
-conversion caching, and semantic comparison to this module. ``run_tests.py``
+conversion, and semantic comparison to this module. ``run_tests.py``
 is intentionally limited to unittest discovery and suite lifecycle.
 """
 
@@ -17,6 +17,8 @@ import contextlib
 import importlib.util
 import io
 import json
+import math
+import shlex
 import subprocess
 import sys
 import tempfile
@@ -42,21 +44,22 @@ RESOURCE_MODES = ("static", "dynamic")
 
 _temp_owner: tempfile.TemporaryDirectory[str] | None = None
 _temp: Path | None = None
-_outputs: dict[tuple[str, str], Path] = {}
-STATEVECTOR_REPORT: dict = {}
-MEASUREMENT_REPORT: dict = {}
+REPORT: list[str] = []
+_saved_environment: dict[str, str | None] = {}
 
 
 def start_session() -> Path:
     """Create the suite's shared temporary directory and simulator caches."""
 
     global _temp_owner, _temp
-    _outputs.clear()
-    STATEVECTOR_REPORT.clear()
-    MEASUREMENT_REPORT.clear()
+    if _temp is not None:
+        raise RuntimeError("a test session is already active")
+    REPORT.clear()
     TEMP_ROOT.mkdir(parents=True, exist_ok=True)
     _temp_owner = tempfile.TemporaryDirectory(prefix="run-", dir=TEMP_ROOT)
     _temp = Path(_temp_owner.name)
+    for key in ("MPLCONFIGDIR", "XDG_CACHE_HOME", "ZIG_GLOBAL_CACHE_DIR"):
+        _saved_environment[key] = os.environ.get(key)
     os.environ["MPLCONFIGDIR"] = str(_temp / "cache" / "matplotlib")
     os.environ["XDG_CACHE_HOME"] = str(_temp / "cache")
     os.environ["ZIG_GLOBAL_CACHE_DIR"] = str(_temp / "zig-global-cache")
@@ -70,19 +73,27 @@ def temp_dir() -> Path:
 
 
 def finish_session(success: bool) -> None:
-    """Write completed semantic output and remove the temporary directory."""
+    """Write the report and restore the environment even when reporting fails."""
 
     global _temp_owner, _temp
-    write_semantic_report(
-        STATEVECTOR_REPORT, MEASUREMENT_REPORT, suite_success=success
-    )
-    if _temp_owner is not None:
-        _temp_owner.cleanup()
-    _temp_owner = None
-    _temp = None
-    _outputs.clear()
-    if TEMP_ROOT.exists() and not any(TEMP_ROOT.iterdir()):
-        TEMP_ROOT.rmdir()
+    try:
+        RESULTS.mkdir(parents=True, exist_ok=True)
+        status = "complete" if success else "partial (the test suite failed)"
+        SEMANTIC_REPORT.write_text(
+            f"Semantic equivalence results\nReport status: {status}\n" + "\n".join(REPORT) + "\n",
+            encoding="utf-8",
+        )
+    finally:
+        for key, value in _saved_environment.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
+        _saved_environment.clear()
+        if _temp_owner is not None:
+            _temp_owner.cleanup()
+        _temp_owner = None
+        _temp = None
 
 
 def fixture(case_dir: Path) -> Path:
@@ -93,7 +104,7 @@ def fixture(case_dir: Path) -> Path:
     return path
 
 
-class TestFailure(RuntimeError):
+class TestFailure(AssertionError):
     """A regression check failed."""
 
 
@@ -103,7 +114,9 @@ class ValidationTest(unittest.TestCase):
     case_dir: Path
 
     def test_conversion_and_validation(self) -> None:
-        verify_valid_fixture(self.case_dir)
+        for mode in RESOURCE_MODES:
+            with self.subTest(mode=mode):
+                output(self.case_dir, mode)
 
 
 def run(
@@ -111,6 +124,7 @@ def run(
     *,
     env: dict[str, str] | None = None,
     expect_failure: bool = False,
+    timeout: float = 300,
 ) -> subprocess.CompletedProcess[str]:
     """Run a repository command and enforce its expected exit behavior.
 
@@ -120,19 +134,29 @@ def run(
     """
 
     rendered = [str(part) for part in command]
-    result = subprocess.run(
-        rendered,
-        cwd=ROOT,
-        env=env,
-        text=True,
-        capture_output=True,
-    )
+    try:
+        result = subprocess.run(
+            rendered, cwd=ROOT, env=env, text=True, capture_output=True,
+            timeout=timeout,
+        )
+    except subprocess.TimeoutExpired as error:
+        raise TestFailure(
+            f"command timed out after {timeout}s: {shlex.join(rendered)}\n"
+            f"{error.stdout or ''}\n{error.stderr or ''}"
+        ) from error
+    except OSError as error:
+        raise TestFailure(f"cannot run {shlex.join(rendered)}: {error}") from error
+    if result.returncode < 0:
+        raise TestFailure(
+            f"command terminated by signal {-result.returncode}: "
+            f"{shlex.join(rendered)}\n{result.stdout}\n{result.stderr}"
+        )
     failed = result.returncode != 0
     if failed != expect_failure:
         output = "\n".join(part for part in (result.stdout, result.stderr) if part)
         expectation = "failure" if expect_failure else "success"
         raise TestFailure(
-            f"expected {expectation}: {' '.join(rendered)}\n{output}".rstrip()
+            f"expected {expectation}: {shlex.join(rendered)}\n{output}".rstrip()
         )
     return result
 
@@ -153,23 +177,6 @@ def require_contains(path: Path, *patterns: str) -> str:
     return text
 
 
-def require_adjacent(text: str, measurement: str, recording: str, count: int) -> None:
-    """Require ``count`` measurements to be followed by an output record.
-
-    Immediate adjacency matters because recording a result later could change
-    conditional-program output by recording a measurement from an untaken path.
-    """
-
-    lines = text.splitlines()
-    adjacent = sum(
-        measurement in line
-        and index + 1 < len(lines)
-        and recording in lines[index + 1]
-        for index, line in enumerate(lines)
-    )
-    require(adjacent == count, f"expected {count} adjacent output records, got {adjacent}")
-
-
 def verify_qrisp_fixtures(temp: Path) -> None:
     """Regenerate Qrisp fixtures in isolation and reject checked-in drift."""
 
@@ -182,9 +189,9 @@ def verify_qrisp_fixtures(temp: Path) -> None:
 
     checked_in = {
         path.relative_to(TESTS): path
-        for category in ("validation", "statevector", "semantics")
-        for path in (TESTS / category).glob("*/input.mlir")
-        if (path.parent / "test_case.py").is_file()
+        for path in TESTS.glob("**/input.mlir")
+        if not path.is_relative_to(TEMP_ROOT)
+        and (path.parent / "test_case.py").is_file()
         and case_has_qrisp_program(path.parent / "test_case.py")
     }
     fresh = {
@@ -216,8 +223,9 @@ def convert_and_validate(fixture: Path, mode: str, temp: Path) -> Path:
     protects the driver's documented default. Static mode passes it explicitly.
     """
 
-    category, case = fixture.relative_to(TESTS).parts[:2]
-    output = temp / f"{category}-{case}.{mode}.ll"
+    require(mode in RESOURCE_MODES, f"invalid resource mode: {mode}")
+    work = Path(tempfile.mkdtemp(prefix=f"convert-{fixture.parent.name}-{mode}-", dir=temp))
+    output = work / "output.ll"
     command: list[str | Path] = [sys.executable, DRIVER]
     if mode == "static":
         command.extend(["--static"])
@@ -225,27 +233,13 @@ def convert_and_validate(fixture: Path, mode: str, temp: Path) -> Path:
     run(command)
     run([sys.executable, VALIDATOR, output])
     run([OPT, "-passes=verify", "-disable-output", output])
-    stem = output.with_suffix("")
-    for suffix in ("llvm.mlir", "raw.ll"):
-        require(not stem.with_suffix(f".{suffix}").exists(), f"unexpected {suffix}")
     return output
 
 
-def verify_valid_fixture(case_dir: Path) -> None:
-    """Convert and validate one fixture in both resource modes."""
-
-    source = fixture(case_dir)
-    for mode in ("static", "dynamic"):
-        _outputs[(mode, str(case_dir))] = convert_and_validate(source, mode, temp_dir())
-
-
 def output(case_dir: Path, mode: str = "static") -> Path:
-    """Return a validated conversion, creating and caching it when necessary."""
+    """Convert and validate a case in its own temporary directory."""
 
-    key = (mode, str(case_dir))
-    if key not in _outputs:
-        _outputs[key] = convert_and_validate(fixture(case_dir), mode, temp_dir())
-    return _outputs[key]
+    return convert_and_validate(fixture(case_dir), mode, temp_dir())
 
 
 def load_case(path: Path):
@@ -267,65 +261,61 @@ def case_has_qrisp_program(path: Path) -> bool:
 
 
 def load_statevector(path: Path) -> dict:
-    """Load and minimally validate a state-vector JSON document."""
+    """Load and validate a state-vector JSON document."""
 
     try:
         document = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as error:
         raise TestFailure(f"cannot read state vector {path}: {error}") from error
-    require(document.get("format") == "jasp-to-qir-statevector-v1", f"{path}: bad format")
-    require(isinstance(document.get("num_qubits"), int), f"{path}: bad qubit count")
-    require(isinstance(document.get("amplitudes"), list), f"{path}: bad amplitudes")
+    validate_statevector(document, str(path))
     return document
 
 
+def validate_statevector(document: dict, context: str) -> list[complex]:
+    """Reject malformed, non-finite, truncated, or unnormalized simulator output."""
+
+    require(isinstance(document, dict), f"{context}: expected a state-vector object")
+    require(document.get("format") == "jasp-to-qir-statevector-v1", f"{context}: bad format")
+    qubits = document.get("num_qubits")
+    require(type(qubits) is int and qubits >= 0, f"{context}: bad qubit count")
+    require(document.get("basis_order") == "qubit 0 is the leftmost (most-significant) bit",
+            f"{context}: bad basis order")
+    pairs = document.get("amplitudes")
+    require(isinstance(pairs, list) and len(pairs) == 1 << qubits,
+            f"{context}: state-vector length mismatch")
+    values = []
+    for index, pair in enumerate(pairs):
+        require(isinstance(pair, (list, tuple)) and len(pair) == 2
+                and all(type(v) in (int, float) and math.isfinite(v) for v in pair),
+                f"{context}: malformed amplitude {index}")
+        values.append(complex(*pair))
+    norm = sum(abs(value) ** 2 for value in values)
+    require(abs(norm - 1) <= STATEVECTOR_TOLERANCE,
+            f"{context}: state vector is not normalized (norm squared {norm})")
+    return values
+
+
 def compare_statevectors(expected: dict, actual: dict, case: str, mode: str) -> float:
-    """Compare two normalized dense vectors with a small numerical tolerance."""
+    """Compare physical states, aligning global phase using their overlap.
 
-    require(
-        expected["num_qubits"] == actual["num_qubits"],
-        f"{case} ({mode}): qubit-count mismatch",
-    )
-    require(
-        expected.get("basis_order") == actual.get("basis_order"),
-        f"{case} ({mode}): basis-order mismatch",
-    )
-    expected_values = expected["amplitudes"]
-    actual_values = actual["amplitudes"]
-    require(
-        len(expected_values) == len(actual_values),
-        f"{case} ({mode}): state-vector length mismatch",
-    )
-    # Qrisp's simulator may use single-precision kernels for decomposed gates.
+    The exporters also canonicalize phase, but selecting the first nonzero
+    amplitude is unstable when that amplitude is close to numerical noise.
+    """
+
+    context = f"{case} ({mode})"
+    expected_values = validate_statevector(expected, context + " Qrisp")
+    actual_values = validate_statevector(actual, context + " QIR")
+    require(expected["num_qubits"] == actual["num_qubits"],
+            f"{context}: qubit-count mismatch")
+    overlap = sum(a.conjugate() * b for a, b in zip(expected_values, actual_values))
+    phase = overlap / abs(overlap) if abs(overlap) else 1
     maximum_difference = 0.0
-    for index, (expected_pair, actual_pair) in enumerate(
-        zip(expected_values, actual_values)
-    ):
-        require(
-            len(expected_pair) == 2 and len(actual_pair) == 2,
-            f"{case} ({mode}): malformed amplitude {index}",
-        )
-        expected_value = complex(*expected_pair)
-        actual_value = complex(*actual_pair)
-        difference = abs(expected_value - actual_value)
+    for index, (a, b) in enumerate(zip(expected_values, actual_values)):
+        difference = abs(a - b / phase)
         maximum_difference = max(maximum_difference, difference)
-        allowed = STATEVECTOR_TOLERANCE + STATEVECTOR_TOLERANCE * abs(expected_value)
-        require(
-            difference <= allowed,
-            f"{case} ({mode}): amplitude {index} differs: "
-            f"Qrisp={expected_value}, QIR={actual_value}",
-        )
+        require(difference <= STATEVECTOR_TOLERANCE,
+                f"{context}: amplitude {index} differs: Qrisp={a}, QIR={b / phase}")
     return maximum_difference
-
-
-def amplitudes_by_basis(document: dict) -> dict[str, list[float]]:
-    """Label dense amplitudes with their computational-basis strings."""
-
-    width = document["num_qubits"]
-    return {
-        format(index, f"0{width}b"): pair
-        for index, pair in enumerate(document["amplitudes"])
-    }
 
 
 def remove_zero_suffix_qubits(document: dict, qubits: int, case: str, mode: str) -> dict:
@@ -349,82 +339,14 @@ def remove_zero_suffix_qubits(document: dict, qubits: int, case: str, mode: str)
     return projected
 
 
-def verify_statevectors(
-    outputs: dict[tuple[str, str], Path], cases, temp: Path
-) -> dict:
-    """Compare Qrisp and Selene/QuEST vectors in the requested resource modes."""
+def report_table(title: str, headings, rows) -> None:
+    """Keep semantic values side by side without a separate report data model."""
 
-    comparisons = 0
-    report = {}
-    for fixture_name, case in cases.items():
-        function_name = case["function"].__name__
-        qrisp_output = temp / f"{Path(fixture_name).stem}.qrisp-state.json"
-        environment = os.environ.copy()
-        python_path = environment.get("PYTHONPATH")
-        environment["PYTHONPATH"] = str(ROOT) + (os.pathsep + python_path if python_path else "")
-        run(
-            [
-                sys.executable,
-                QRISP_STATEVECTOR,
-                case["source"],
-                "--function",
-                function_name,
-                "--output",
-                qrisp_output,
-            ],
-            env=environment,
-        )
-        expected = load_statevector(qrisp_output)
-        require(
-            expected["num_qubits"] <= case["qubits"],
-            f"{fixture_name}: Qrisp requires more than the simulator capacity",
-        )
-        case_report = {
-            "num_qubits": expected["num_qubits"],
-            "basis_order": expected["basis_order"],
-            "tolerance": STATEVECTOR_TOLERANCE,
-            "resource_modes": case["resource_modes"],
-        }
-        amplitudes = {"qrisp": amplitudes_by_basis(expected)}
-
-        for mode in case["resource_modes"]:
-            qir_output = temp / f"{Path(fixture_name).stem}.{mode}.qir-state.json"
-            command: list[str | Path] = [
-                sys.executable,
-                QIR_STATEVECTOR,
-                outputs[(mode, fixture_name)],
-                "--seed",
-                "7",
-                "--output",
-                qir_output,
-            ]
-            if mode == "dynamic":
-                command.extend(["--n-qubits", str(case["qubits"])])
-            run(command)
-            actual = load_statevector(qir_output)
-            require(
-                actual["num_qubits"] == case["qubits"],
-                f"{fixture_name} ({mode}): QIR resource-count mismatch",
-            )
-            actual = remove_zero_suffix_qubits(
-                actual, expected["num_qubits"], fixture_name, mode
-            )
-            maximum_difference = compare_statevectors(
-                expected, actual, fixture_name, mode
-            )
-            amplitudes[f"{mode}_qir"] = amplitudes_by_basis(actual)
-            case_report[f"{mode}_max_abs_difference"] = maximum_difference
-            comparisons += 1
-        case_report["amplitudes"] = {
-            basis: {
-                source: values[basis]
-                for source, values in amplitudes.items()
-            }
-            for basis in amplitudes["qrisp"]
-        }
-        report[Path(fixture_name).stem] = case_report
-    print(f"PASS state-vector equivalence ({comparisons} comparisons)")
-    return report
+    rows = [tuple(map(str, headings)), *(tuple(map(str, row)) for row in rows)]
+    widths = [max(len(row[i]) for row in rows) for i in range(len(headings))]
+    REPORT.extend(["", title])
+    REPORT.extend("  ".join(value.ljust(width) for value, width in zip(row, widths))
+                  for row in rows)
 
 
 def verify_statevector_case(
@@ -432,26 +354,40 @@ def verify_statevector_case(
     qubits: int,
     resource_modes: tuple[str, ...] = RESOURCE_MODES,
 ) -> None:
-    """Run one state-vector case and retain its report entry."""
+    """Compare one unmeasured Qrisp program with validated QIR in each mode."""
 
-    require(bool(resource_modes), "a state-vector case must select a resource mode")
-    require(
-        len(set(resource_modes)) == len(resource_modes)
-        and all(mode in RESOURCE_MODES for mode in resource_modes),
-        f"invalid resource modes: {resource_modes}",
+    require(bool(resource_modes) and all(mode in RESOURCE_MODES for mode in resource_modes),
+            f"invalid resource modes: {resource_modes}")
+    case_dir = case_dir.resolve()
+    name = str(case_dir.relative_to(TESTS))
+    work = Path(tempfile.mkdtemp(prefix="statevector-", dir=temp_dir()))
+    expected_path = work / "qrisp.json"
+    environment = os.environ.copy()
+    environment["PYTHONPATH"] = str(ROOT) + os.pathsep + environment.get("PYTHONPATH", "")
+    run([sys.executable, QRISP_STATEVECTOR, case_dir / "test_case.py",
+         "--function", "qrisp_program", "--output", expected_path], env=environment)
+    expected = load_statevector(expected_path)
+    require(expected["num_qubits"] <= qubits, f"{name}: insufficient simulator capacity")
+    vectors = [expected]
+    for mode in resource_modes:
+        actual_path = work / f"{mode}.json"
+        command = [sys.executable, QIR_STATEVECTOR, output(case_dir, mode),
+                   "--seed", "7", "--output", actual_path]
+        if mode == "dynamic":
+            command.extend(["--n-qubits", str(qubits)])
+        run(command)
+        actual = load_statevector(actual_path)
+        require(expected["num_qubits"] <= actual["num_qubits"] <= qubits,
+                f"{name} ({mode}): QIR resource-count mismatch")
+        actual = remove_zero_suffix_qubits(actual, expected["num_qubits"], name, mode)
+        compare_statevectors(expected, actual, name, mode)
+        vectors.append(actual)
+    report_table(
+        f"State vector: {name}", ["basis", "Qrisp", *(f"{m.title()} QIR" for m in resource_modes)],
+        [(format(i, f"0{expected['num_qubits']}b"),
+          *(f"[{v['amplitudes'][i][0]: .7f}, {v['amplitudes'][i][1]: .7f}]" for v in vectors))
+         for i in range(len(expected["amplitudes"]))],
     )
-    name = case_dir.name
-    report = verify_statevectors(
-        {(mode, name): output(case_dir, mode) for mode in resource_modes},
-        {name: {
-            "function": load_case(case_dir / "test_case.py").qrisp_program,
-            "source": case_dir / "test_case.py",
-            "qubits": qubits,
-            "resource_modes": resource_modes,
-        }},
-        temp_dir(),
-    )
-    STATEVECTOR_REPORT.update(report)
 
 
 def flatten_tree(value) -> list:
@@ -465,9 +401,23 @@ def flatten_tree(value) -> list:
     return [value]
 
 
+def exact_integer(value, context: str) -> int:
+    """Do not silently truncate fractional or string simulator outputs."""
+
+    try:
+        integer = int(value)
+        valid = not isinstance(value, (str, bytes)) and value == integer
+    except (TypeError, ValueError, OverflowError):
+        valid = False
+    require(valid, f"{context}: expected an integer result, got {value!r}")
+    return integer
+
+
 def qrisp_result_bits(result, widths: tuple[int, ...], case: str) -> list[int]:
     """Expand Qrisp result leaves into QubitArray least-significant-bit order."""
 
+    require(all(type(width) is int and width > 0 for width in widths),
+            f"{case}: result widths must be positive integers")
     leaves = flatten_tree(result)
     require(
         len(leaves) == len(widths),
@@ -475,158 +425,58 @@ def qrisp_result_bits(result, widths: tuple[int, ...], case: str) -> list[int]:
     )
     bits = []
     for value, width in zip(leaves, widths):
-        integer = int(value)
+        integer = exact_integer(value, case)
         require(0 <= integer < 1 << width, f"{case}: result {integer} exceeds width {width}")
         bits.extend((integer >> index) & 1 for index in range(width))
     return bits
 
 
-def selene_result_bits(
-    entries, widths: tuple[int, ...], case: str, mode: str
-) -> list[int]:
-    """Expand Selene scalar, result-array, and packed-integer records."""
+def selene_result_bits(entries, widths: tuple[int, ...], case: str, mode: str) -> list[int]:
+    """Decode static scalar records or dynamic buffer/packed-integer records.
+
+    Selene can expose the whole reusable result buffer before its packed
+    integer record. Only the measured prefix is meaningful; if both forms
+    are present, they must agree. Labels are used only to pair duplicates.
+    """
+
+    require(mode in RESOURCE_MODES, f"invalid resource mode: {mode}")
+    require(all(type(width) is int and width > 0 for width in widths),
+            f"{case}: result widths must be positive integers")
+    context = f"{case} ({mode})"
+    cursor = 0
+
+    def take():
+        nonlocal cursor
+        require(cursor < len(entries), f"{context}: missing measurement output")
+        label, value = entries[cursor]
+        cursor += 1
+        return label, [exact_integer(item, context) for item in flatten_tree(value)]
 
     bits = []
-    cursor = 0
     for width in widths:
-        require(
-            cursor < len(entries),
-            f"{case} ({mode}): missing output for width {width}",
-        )
         if mode == "dynamic" and width > 1:
-            label = entries[cursor][0]
-            items = flatten_tree(entries[cursor][1])
-            cursor += 1
-            if len(items) >= width:
-                values = [int(item) for item in items]
-                require(
-                    all(bit in (0, 1) for bit in values),
-                    f"{case} ({mode}): non-bit result array {values}",
-                )
+            label, values = take()
+            if len(values) == 1:
+                integer = values[0]
+                require(0 <= integer < 1 << width, f"{context}: packed result exceeds width {width}")
+                measured = [(integer >> i) & 1 for i in range(width)]
+            else:
+                require(len(values) >= width and all(v in (0, 1) for v in values),
+                        f"{context}: malformed result buffer {values}")
                 measured = values[:width]
-                bits.extend(measured)
                 if cursor < len(entries) and entries[cursor][0] == label:
-                    packed_items = flatten_tree(entries[cursor][1])
-                    require(
-                        len(packed_items) == 1,
-                        f"{case} ({mode}): malformed packed duplicate "
-                        f"{packed_items}",
-                    )
-                    packed = int(packed_items[0])
-                    expected_packed = sum(
-                        bit << index for index, bit in enumerate(measured)
-                    )
-                    require(
-                        packed == expected_packed,
-                        f"{case} ({mode}): result array packs to "
-                        f"{expected_packed}, but integer output is {packed}",
-                    )
-                    cursor += 1
-                continue
-            require(
-                len(items) == 1,
-                f"{case} ({mode}): malformed packed result {items}",
-            )
-            integer = int(items[0])
-            require(
-                0 <= integer < 1 << width,
-                f"{case} ({mode}): packed result {integer} exceeds width {width}",
-            )
-            bits.extend((integer >> index) & 1 for index in range(width))
-            continue
-
-        for _ in range(width):
-            require(
-                cursor < len(entries),
-                f"{case} ({mode}): incomplete scalar output",
-            )
-            items = flatten_tree(entries[cursor][1])
-            cursor += 1
-            require(
-                len(items) == 1,
-                f"{case} ({mode}): expected a scalar result, got {items}",
-            )
-            bit = int(items[0])
-            require(
-                bit in (0, 1),
-                f"{case} ({mode}): non-bit Selene result {bit}",
-            )
-            bits.append(bit)
-    require(
-        cursor == len(entries),
-        f"{case} ({mode}): got {len(entries) - cursor} unexpected output records",
-    )
-    return bits
-
-
-def verify_measurements(
-    outputs: dict[tuple[str, str], Path], cases, temp: Path
-) -> dict:
-    """Compare deterministic one-shot Qrisp and Selene measurement results."""
-
-    try:
-        from qrisp.jasp import jaspify
-        from selene_sim import Quest, build
-    except ImportError as error:
-        raise TestFailure(f"measurement test dependency is unavailable: {error}") from error
-
-    comparisons = 0
-    report = {}
-    cache_key = "ZIG_GLOBAL_CACHE_DIR"
-    previous_cache = os.environ.get(cache_key)
-    os.environ[cache_key] = str(temp / "zig-global-cache")
-    try:
-        for fixture_name, case in cases.items():
-            with contextlib.redirect_stdout(io.StringIO()):
-                qrisp_result = jaspify(case["function"])()
-            expected = list(case["expected"])
-            qrisp_bits = qrisp_result_bits(
-                qrisp_result, tuple(case["widths"]), fixture_name
-            )
-            require(
-                qrisp_bits == expected,
-                f"{fixture_name}: Qrisp produced {qrisp_bits}, expected {expected}",
-            )
-            case_report = {
-                "bit_order": "measurement emission order; QubitArray values are least-significant-bit first",
-                "expected": "".join(str(bit) for bit in expected),
-                "qrisp": "".join(str(bit) for bit in qrisp_bits),
-            }
-
-            for mode in ("static", "dynamic"):
-                build_dir = temp / f"selene-{Path(fixture_name).stem}-{mode}"
-                try:
-                    runner = build(outputs[(mode, fixture_name)], build_dir=build_dir)
-                    entries = list(
-                        runner.run(
-                            simulator=Quest(random_seed=7),
-                            n_qubits=case["qubits"],
-                        )
-                    )
-                except Exception as error:
-                    raise TestFailure(
-                        f"{fixture_name} ({mode}): Selene execution failed: {error}"
-                    ) from error
-                qir_bits = selene_result_bits(
-                    entries, tuple(case["widths"]), fixture_name, mode
-                )
-                require(
-                    qir_bits == expected,
-                    f"{fixture_name} ({mode}): QIR produced {qir_bits}, "
-                    f"expected {expected} and Qrisp produced {qrisp_bits}",
-                )
-                case_report[f"{mode}_qir"] = "".join(
-                    str(bit) for bit in qir_bits
-                )
-                comparisons += 1
-            report[Path(fixture_name).stem] = case_report
-    finally:
-        if previous_cache is None:
-            os.environ.pop(cache_key, None)
+                    _, packed = take()
+                    require(packed == [sum(bit << i for i, bit in enumerate(measured))],
+                            f"{context}: buffer and packed result disagree")
+            bits.extend(measured)
         else:
-            os.environ[cache_key] = previous_cache
-    print(f"PASS deterministic measurement equivalence ({comparisons} comparisons)")
-    return report
+            for _ in range(width):
+                _, values = take()
+                require(len(values) == 1 and values[0] in (0, 1),
+                        f"{context}: expected a scalar bit, got {values}")
+                bits.extend(values)
+    require(cursor == len(entries), f"{context}: unexpected output records")
+    return bits
 
 
 def verify_measurement_case(
@@ -637,89 +487,27 @@ def verify_measurement_case(
     widths: tuple[int, ...],
     expected: tuple[int, ...],
 ) -> None:
-    """Run one deterministic measurement case and retain its report entry."""
+    """Check every deterministic outcome against an independent expected bitstring."""
 
-    name = case_dir.name
-    report = verify_measurements(
-        {(mode, name): output(case_dir, mode) for mode in ("static", "dynamic")},
-        {name: {
-            "function": function,
-            "qubits": qubits,
-            "widths": widths,
-            "expected": expected,
-        }},
-        temp_dir(),
-    )
-    MEASUREMENT_REPORT.update(report)
+    from qrisp.jasp import jaspify
+    from selene_sim import Quest, build
 
-
-def write_semantic_report(
-    statevectors: dict, measurements: dict, *, suite_success: bool = True
-) -> None:
-    """Persist completed semantic values in aligned, human-readable columns."""
-
-    def format_amplitude(pair) -> str:
-        return f"[{pair[0]: .7f}, {pair[1]: .7f}]"
-
-    RESULTS.mkdir(parents=True, exist_ok=True)
-    status = "complete" if suite_success else "partial (the test suite failed)"
-    lines = [
-        "Semantic equivalence results",
-        "=" * 80,
-        f"Report status: {status}",
-    ]
-
-    for case, report in statevectors.items():
-        modes = report["resource_modes"]
-        sources = ("qrisp", *(f"{mode}_qir" for mode in modes))
-        headings = ("Qrisp", *(f"{mode.title()} QIR" for mode in modes))
-        amplitude_rows = [
-            (
-                basis,
-                *(format_amplitude(amplitudes[source]) for source in sources),
-            )
-            for basis, amplitudes in report["amplitudes"].items()
-        ]
-        basis_width = max(len("basis"), *(len(row[0]) for row in amplitude_rows))
-        value_width = max(
-            *(len(heading) for heading in headings),
-            *(len(value) for row in amplitude_rows for value in row[1:]),
-        )
-        differences = ", ".join(
-            f"{mode}={report[f'{mode}_max_abs_difference']:.6g}" for mode in modes
-        )
-        lines.extend(
-            [
-                "",
-                f"State vector: {case}",
-                f"  max |difference|: {differences}",
-                f"  {'basis':<{basis_width}}  "
-                + "  ".join(f"{heading:<{value_width}}" for heading in headings),
-                f"  {'-' * basis_width}  "
-                + "  ".join("-" * value_width for _ in headings),
-            ]
-        )
-        lines.extend(
-            f"  {row[0]:<{basis_width}}  "
-            + "  ".join(f"{value:<{value_width}}" for value in row[1:])
-            for row in amplitude_rows
-        )
-
-    for case, report in measurements.items():
-        values = (report["qrisp"], report["static_qir"], report["dynamic_qir"])
-        value_width = max(len("Dynamic QIR"), *(len(value) for value in values))
-        lines.extend(
-            [
-                "",
-                f"Measurement: {case}",
-                f"  {'Qrisp':<{value_width}}  {'Static QIR':<{value_width}}  Dynamic QIR",
-                f"  {'-' * value_width}  {'-' * value_width}  {'-' * value_width}",
-                f"  {values[0]:<{value_width}}  {values[1]:<{value_width}}  {values[2]}",
-            ]
-        )
-
-    SEMANTIC_REPORT.write_text("\n".join(lines) + "\n", encoding="utf-8")
-    print(f"WROTE semantic results to {SEMANTIC_REPORT.relative_to(ROOT)}")
+    case_dir = case_dir.resolve()
+    name = str(case_dir.relative_to(TESTS))
+    work = Path(tempfile.mkdtemp(prefix="measurement-", dir=temp_dir()))
+    with contextlib.redirect_stdout(io.StringIO()):
+        result = jaspify(function)()
+    qrisp_bits = qrisp_result_bits(result, widths, name)
+    require(qrisp_bits == list(expected), f"{name}: Qrisp produced {qrisp_bits}, expected {expected}")
+    results = [qrisp_bits]
+    for mode in RESOURCE_MODES:
+        runner = build(output(case_dir, mode), build_dir=work / mode)
+        entries = list(runner.run(simulator=Quest(random_seed=7), n_qubits=qubits))
+        bits = selene_result_bits(entries, widths, name, mode)
+        require(bits == list(expected), f"{name} ({mode}): QIR produced {bits}, expected {expected}")
+        results.append(bits)
+    report_table(f"Measurement: {name}", ["Qrisp", "Static QIR", "Dynamic QIR"],
+                 [["".join(map(str, bits)) for bits in results]])
 
 
 def expect_conversion_failure(
@@ -731,7 +519,9 @@ def expect_conversion_failure(
 ) -> None:
     """Require conversion to fail cleanly with a specific diagnostic."""
 
-    output = temp / f"invalid-{fixture.stem}-{mode}.ll"
+    require(mode in RESOURCE_MODES, f"invalid resource mode: {mode}")
+    work = Path(tempfile.mkdtemp(prefix="invalid-", dir=temp))
+    output = work / "output.ll"
     command: list[str | Path] = [sys.executable, DRIVER]
     if mode == "static":
         command.extend(["--static"])

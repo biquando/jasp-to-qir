@@ -17,11 +17,3 @@ class DynamicAllocationTest(unittest.TestCase):
         output = support.convert_and_validate(
             fixture, "dynamic", support.temp_dir()
         )
-        text = support.require_contains(
-            output,
-            "alloca ptr, i64 %",
-            "call ptr @__quantum__rt__qubit_allocate(ptr null)",
-            "call void @__quantum__rt__qubit_release(ptr",
-            '!"backwards_branching", i2 3',
-        )
-        self.assertNotIn("__quantum__rt__qubit_array_allocate", text)

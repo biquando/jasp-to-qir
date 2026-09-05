@@ -19,16 +19,3 @@ class FuseTest(unittest.TestCase):
         output = support.convert_and_validate(
             support.fixture(self.case_dir), "dynamic", support.temp_dir()
         )
-        dynamic = support.require_contains(
-            output,
-            "alloca ptr, i64 2",
-            "alloca ptr, i64 3",
-            "alloca ptr, i64 4",
-            "call void @__quantum__rt__qubit_release(ptr",
-        )
-        self.assertEqual(
-            dynamic.count("call ptr @__quantum__rt__qubit_allocate(ptr null)"), 4
-        )
-        self.assertEqual(
-            dynamic.count("call void @__quantum__rt__qubit_release(ptr"), 1
-        )

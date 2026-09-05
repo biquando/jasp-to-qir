@@ -1,21 +1,28 @@
 #!/usr/bin/env python3
-"""Discover and run the categorized Jasp-to-QIR test suite."""
-
+"""Standard unittest CLI with isolated caches and a semantic report."""
+import os
 import sys
 import unittest
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT))
 from tests import support
 
 
-if __name__ == "__main__":
+def main() -> int:
+    os.chdir(ROOT)
     support.start_session()
-    result = None
+    success = False
     try:
-        result = unittest.TextTestRunner(verbosity=2).run(
-            unittest.defaultTestLoader.discover("tests")
-        )
+        args = sys.argv[1:] or ['discover', '-s', 'tests', '-t', '.']
+        result = unittest.main(module=None, argv=[sys.argv[0], *args],
+                               verbosity=2, exit=False).result
+        success = result.wasSuccessful() and result.testsRun > 0
     finally:
-        support.finish_session(result is not None and result.wasSuccessful())
-    raise SystemExit(not result.wasSuccessful())
+        support.finish_session(success)
+    return 0 if success else 1
+
+
+if __name__ == '__main__':
+    raise SystemExit(main())

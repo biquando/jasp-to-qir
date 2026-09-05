@@ -2,9 +2,6 @@
 """Regenerate MLIR beside every test that declares ``qrisp_program``."""
 
 import argparse
-import contextlib
-import importlib.util
-import io
 import sys
 from pathlib import Path
 
@@ -15,15 +12,7 @@ TESTS = Path(__file__).resolve().parent
 sys.path.insert(0, str(TESTS.parent))
 
 
-def load_case(path: Path):
-    name = "fixture_" + "_".join(path.parent.parts[-2:])
-    spec = importlib.util.spec_from_file_location(name, path)
-    if spec is None or spec.loader is None:
-        raise RuntimeError(f"cannot load test case {path}")
-    module = importlib.util.module_from_spec(spec)
-    with contextlib.redirect_stdout(io.StringIO()):
-        spec.loader.exec_module(module)
-    return module
+from tests.support import load_case
 
 
 def write_fixture(function, output: Path) -> None:
@@ -37,13 +26,11 @@ def write_fixture(function, output: Path) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output-dir", type=Path, default=TESTS)
+    parser.add_argument("cases", nargs="*", help="case paths relative to tests/")
     args = parser.parse_args()
 
-    test_cases = (
-        path
-        for category in ("validation", "statevector", "semantics")
-        for path in (TESTS / category).glob("*/test_case.py")
-    )
+    test_cases = ([TESTS / case / "test_case.py" for case in args.cases]
+                  if args.cases else TESTS.glob("**/test_case.py"))
     for test_case in sorted(test_cases):
         module = load_case(test_case)
         if not hasattr(module, "qrisp_program"):
