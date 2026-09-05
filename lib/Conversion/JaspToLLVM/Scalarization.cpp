@@ -1,4 +1,4 @@
-#include "LowerJaspToQIRInternal.h"
+#include "JaspToLLVMInternal.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Tensor/IR/Tensor.h"
 

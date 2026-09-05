@@ -1,6 +1,6 @@
 #pragma once
 
-#include "LowerJaspToQIRInternal.h"
+#include "JaspToLLVMInternal.h"
 #include "mlir/Dialect/LLVMIR/LLVMDialect.h"
 #include "mlir/IR/Builders.h"
 

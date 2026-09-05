@@ -1,7 +1,7 @@
-#include "JaspToQIR/Conversion/LowerJaspToQIR/LowerJaspToQIR.h"
+#include "JaspToQIR/Conversion/JaspToLLVM/JaspToLLVM.h"
 
 #include "JaspToQIR/Dialect/Jasp/IR/JaspOps.h"
-#include "LowerJaspToQIRInternal.h"
+#include "JaspToLLVMInternal.h"
 #include "llvm/Support/CommandLine.h"
 #include "mlir/Dialect/Math/IR/Math.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
@@ -22,18 +22,18 @@ namespace {
 namespace jasp_ir = ::jasp;
 namespace lowering = mlir::jasp::internal;
 
-struct LowerJaspToQIRPass final
-    : PassWrapper<LowerJaspToQIRPass, OperationPass<ModuleOp>> {
-    MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(LowerJaspToQIRPass)
+struct JaspToLLVMPass final
+    : PassWrapper<JaspToLLVMPass, OperationPass<ModuleOp>> {
+    MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(JaspToLLVMPass)
 
-    LowerJaspToQIRPass() = default;
-    LowerJaspToQIRPass(const LowerJaspToQIRPass &other) : PassWrapper(other)
+    JaspToLLVMPass() = default;
+    JaspToLLVMPass(const JaspToLLVMPass &other) : PassWrapper(other)
     {
         resourceManagement = other.resourceManagement;
         resultBufferSize = other.resultBufferSize;
     }
 
-    StringRef getArgument() const final { return "lower-jasp-to-qir"; }
+    StringRef getArgument() const final { return "convert-jasp-to-llvm"; }
     StringRef getDescription() const final
     {
         return "Lower typed Jasp operations before standard LLVM conversion";
@@ -77,17 +77,17 @@ struct LowerJaspToQIRPass final
             return;
         }
 
-        lowering::LowerJaspToQIROptions options{*parsedResourceManagement,
+        lowering::JaspToLLVMOptions options{*parsedResourceManagement,
                                            resultBufferSize};
-        FailureOr<lowering::LowerJaspToQIRModuleInfo> moduleInfo =
-            lowering::prepareLowerJaspToQIRModule(getOperation(), options);
+        FailureOr<lowering::JaspToLLVMModuleInfo> moduleInfo =
+            lowering::prepareJaspToLLVMModule(getOperation(), options);
         if (failed(moduleInfo)) {
             signalPassFailure();
             return;
         }
 
         std::unique_ptr<TypeConverter> converter =
-            lowering::createLowerJaspToQIRTypeConverter(context, options);
+            lowering::createJaspToLLVMTypeConverter(context, options);
         ConversionTarget target(context);
         target.addLegalDialect<BuiltinDialect, LLVM::LLVMDialect>();
         target.addIllegalDialect<jasp_ir::JaspDialect, tensor::TensorDialect>();
@@ -136,7 +136,7 @@ struct LowerJaspToQIRPass final
 
 } // namespace
 
-std::unique_ptr<mlir::Pass> jasp_to_qir::createLowerJaspToQIRPass()
+std::unique_ptr<mlir::Pass> jasp_to_qir::createJaspToLLVMPass()
 {
-    return std::make_unique<LowerJaspToQIRPass>();
+    return std::make_unique<JaspToLLVMPass>();
 }

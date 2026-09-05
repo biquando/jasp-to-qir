@@ -16,7 +16,7 @@ enum class ResourceManagement {
     Dynamic,
 };
 
-struct LowerJaspToQIROptions {
+struct JaspToLLVMOptions {
     ResourceManagement resourceManagement = ResourceManagement::Static;
     int64_t resultBufferSize = 64;
 
@@ -46,7 +46,7 @@ struct QIRModuleFeatures {
 
 /// Facts established before dialect conversion and consumed by lowering
 /// patterns or by the final QIR module annotation step.
-struct LowerJaspToQIRModuleInfo {
+struct JaspToLLVMModuleInfo {
     int64_t requiredQubits = 0;
     int64_t requiredResults = 0;
     QIRModuleFeatures features;
@@ -75,35 +75,35 @@ parseResourceManagement(llvm::StringRef value);
 llvm::StringRef
 stringifyResourceManagement(ResourceManagement resourceManagement);
 
-FailureOr<LowerJaspToQIRModuleInfo>
-prepareLowerJaspToQIRModule(ModuleOp module, const LowerJaspToQIROptions &options);
+FailureOr<JaspToLLVMModuleInfo>
+prepareJaspToLLVMModule(ModuleOp module, const JaspToLLVMOptions &options);
 
 std::unique_ptr<TypeConverter>
-createLowerJaspToQIRTypeConverter(MLIRContext &context,
-                             const LowerJaspToQIROptions &options);
+createJaspToLLVMTypeConverter(MLIRContext &context,
+                             const JaspToLLVMOptions &options);
 
 bool isSupportedQuantumGate(llvm::StringRef name);
 
 void populateQubitManagementPatterns(TypeConverter &converter,
                                      RewritePatternSet &patterns,
-                                     const LowerJaspToQIROptions &options,
-                                     const LowerJaspToQIRModuleInfo &moduleInfo);
+                                     const JaspToLLVMOptions &options,
+                                     const JaspToLLVMModuleInfo &moduleInfo);
 
 void populateQubitArrayOperationPatterns(TypeConverter &converter,
                                          RewritePatternSet &patterns,
-                                         const LowerJaspToQIROptions &options);
+                                         const JaspToLLVMOptions &options);
 
 void populateQuantumGatePatterns(TypeConverter &converter,
                                  RewritePatternSet &patterns);
 
 void populateMeasurementPatterns(TypeConverter &converter,
                                  RewritePatternSet &patterns,
-                                 const LowerJaspToQIROptions &options,
-                                 const LowerJaspToQIRModuleInfo &moduleInfo);
+                                 const JaspToLLVMOptions &options,
+                                 const JaspToLLVMModuleInfo &moduleInfo);
 
 void populateResetPatterns(TypeConverter &converter,
                            RewritePatternSet &patterns,
-                           const LowerJaspToQIROptions &options);
+                           const JaspToLLVMOptions &options);
 
 void populateScalarizationPatterns(TypeConverter &converter,
                                    RewritePatternSet &patterns);

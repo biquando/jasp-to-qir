@@ -1,5 +1,5 @@
 #include "JaspToQIR/Dialect/Jasp/IR/JaspOps.h"
-#include "LowerJaspToQIRInternal.h"
+#include "JaspToLLVMInternal.h"
 #include "QIRBuilder.h"
 #include "mlir/Dialect/LLVMIR/LLVMDialect.h"
 #include "mlir/Dialect/SCF/IR/SCF.h"
@@ -13,7 +13,7 @@ namespace {
 struct LowerReset final : OpConversionPattern<::jasp::ResetOp> {
     LowerReset(TypeConverter &converter,
                MLIRContext *context,
-               LowerJaspToQIROptions options)
+               JaspToLLVMOptions options)
         : OpConversionPattern(converter, context),
           options(options)
     {}
@@ -73,14 +73,14 @@ struct LowerReset final : OpConversionPattern<::jasp::ResetOp> {
     }
 
   private:
-    LowerJaspToQIROptions options;
+    JaspToLLVMOptions options;
 };
 
 } // namespace
 
 void populateResetPatterns(TypeConverter &converter,
                            RewritePatternSet &patterns,
-                           const LowerJaspToQIROptions &options)
+                           const JaspToLLVMOptions &options)
 {
     patterns.add<LowerReset>(converter, patterns.getContext(), options);
 }

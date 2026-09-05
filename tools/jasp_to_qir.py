@@ -126,7 +126,7 @@ def convert(
         run(
             JASP_OPT,
             input_path,
-            "--lower-jasp-to-qir="
+            "--convert-jasp-to-llvm="
             f"resource-management={resource_management} "
             f"result-buffer-size={result_buffer_size}",
             "-o", nojasp_mlir,

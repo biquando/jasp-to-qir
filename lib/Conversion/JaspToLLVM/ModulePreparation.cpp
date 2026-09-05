@@ -1,7 +1,7 @@
 #include <algorithm>
 
 #include "JaspToQIR/Dialect/Jasp/IR/JaspOps.h"
-#include "LowerJaspToQIRInternal.h"
+#include "JaspToLLVMInternal.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/SCF/IR/SCF.h"
@@ -82,8 +82,8 @@ LogicalResult prepareMain(ModuleOp module)
 }
 
 void setModuleAttributes(ModuleOp module,
-                         const LowerJaspToQIROptions &options,
-                         const LowerJaspToQIRModuleInfo &moduleInfo)
+                         const JaspToLLVMOptions &options,
+                         const JaspToLLVMModuleInfo &moduleInfo)
 {
     MLIRContext *context = module.getContext();
     Type i64 = IntegerType::get(context, 64);
@@ -142,10 +142,10 @@ stringifyResourceManagement(ResourceManagement resourceManagement)
     llvm_unreachable("unknown resource management mode");
 }
 
-FailureOr<LowerJaspToQIRModuleInfo>
-prepareLowerJaspToQIRModule(ModuleOp module, const LowerJaspToQIROptions &options)
+FailureOr<JaspToLLVMModuleInfo>
+prepareJaspToLLVMModule(ModuleOp module, const JaspToLLVMOptions &options)
 {
-    LowerJaspToQIRModuleInfo moduleInfo;
+    JaspToLLVMModuleInfo moduleInfo;
     moduleInfo.features.hasBackwardsBranching = options.isDynamic();
     int64_t functionCount = 0;
     int64_t mainReturnCount = 0;

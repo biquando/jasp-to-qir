@@ -4,6 +4,6 @@
 
 namespace jasp_to_qir {
 
-std::unique_ptr<mlir::Pass> createLowerJaspToQIRPass();
+std::unique_ptr<mlir::Pass> createJaspToLLVMPass();
 
 } // namespace jasp_to_qir

@@ -1,5 +1,5 @@
 #include "JaspToQIR/Dialect/Jasp/IR/JaspOps.h"
-#include "LowerJaspToQIRInternal.h"
+#include "JaspToLLVMInternal.h"
 #include "QIRBuilder.h"
 #include "mlir/Dialect/LLVMIR/LLVMDialect.h"
 #include "mlir/Dialect/SCF/IR/SCF.h"
@@ -40,7 +40,7 @@ Value normalizeSliceIndex(ConversionPatternRewriter &rewriter,
 struct LowerGetQubit final : OpConversionPattern<jasp_ir::GetQubitOp> {
     LowerGetQubit(TypeConverter &converter,
                   MLIRContext *context,
-                  LowerJaspToQIROptions options)
+                  JaspToLLVMOptions options)
         : OpConversionPattern(converter, context),
           options(options)
     {}
@@ -71,7 +71,7 @@ struct LowerGetQubit final : OpConversionPattern<jasp_ir::GetQubitOp> {
     }
 
   private:
-    LowerJaspToQIROptions options;
+    JaspToLLVMOptions options;
 };
 
 struct LowerGetSize final : OpConversionPattern<jasp_ir::GetSizeOp> {
@@ -91,7 +91,7 @@ struct LowerGetSize final : OpConversionPattern<jasp_ir::GetSizeOp> {
 struct LowerSlice final : OpConversionPattern<jasp_ir::SliceOp> {
     LowerSlice(TypeConverter &converter,
                MLIRContext *context,
-               LowerJaspToQIROptions options)
+               JaspToLLVMOptions options)
         : OpConversionPattern(converter, context),
           options(options)
     {}
@@ -133,13 +133,13 @@ struct LowerSlice final : OpConversionPattern<jasp_ir::SliceOp> {
     }
 
   private:
-    LowerJaspToQIROptions options;
+    JaspToLLVMOptions options;
 };
 
 struct LowerFuse final : OpConversionPattern<jasp_ir::FuseOp> {
     LowerFuse(TypeConverter &converter,
               MLIRContext *context,
-              LowerJaspToQIROptions options)
+              JaspToLLVMOptions options)
         : OpConversionPattern(converter, context),
           options(options)
     {}
@@ -217,14 +217,14 @@ struct LowerFuse final : OpConversionPattern<jasp_ir::FuseOp> {
     }
 
   private:
-    LowerJaspToQIROptions options;
+    JaspToLLVMOptions options;
 };
 
 } // namespace
 
 void populateQubitArrayOperationPatterns(TypeConverter &converter,
                                          RewritePatternSet &patterns,
-                                         const LowerJaspToQIROptions &options)
+                                         const JaspToLLVMOptions &options)
 {
     MLIRContext *context = patterns.getContext();
     patterns.add<LowerGetSize>(converter, context);

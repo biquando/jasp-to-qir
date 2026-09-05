@@ -24,13 +24,13 @@ list(APPEND CMAKE_MODULE_PATH "${MLIR_CMAKE_DIR}")
 include(AddMLIR)
 
 add_subdirectory(lib/Dialect/Jasp/IR)
-add_subdirectory(lib/Conversion/LowerJaspToQIR)
+add_subdirectory(lib/Conversion/JaspToLLVM)
 add_subdirectory(lib/Conversion/MathForQIR)
 add_subdirectory(lib/Transforms/FinalizeQIRLLVM)
 
 add_executable(jasp-to-qir tools/jasp-to-qir.cpp)
 target_link_libraries(jasp-to-qir PRIVATE
-  JaspToQIRLowerJaspToQIR
+  JaspToQIRJaspToLLVM
   JaspToQIRMathForQIR
   JaspToQIRFinalizeQIRLLVM
   LLVM

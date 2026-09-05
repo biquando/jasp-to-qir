@@ -4,7 +4,7 @@
 Qrisp/Jasp-generated MLIR code to QIR. This document gives an outline of the
 pipeline. The detailed descriptions of each custom lowering pass are in:
 
-- [`Conversion/LowerJaspToQIR/README.md`](Conversion/LowerJaspToQIR/README.md)
+- [`Conversion/JaspToLLVM/README.md`](Conversion/JaspToLLVM/README.md)
 - [`Conversion/MathForQIR/README.md`](Conversion/MathForQIR/README.md)
 - [`Transforms/FinalizeQIRLLVM/README.md`](Transforms/FinalizeQIRLLVM/README.md)
 
@@ -13,7 +13,7 @@ pipeline. The detailed descriptions of each custom lowering pass are in:
 ```text
 Qrisp/Jasp-generated MLIR with StableHLO already lowered to scf/math/arith/tensor
   |
-  | --lower-jasp-to-qir (lib/Conversion/LowerJaspToQIR)
+  | --convert-jasp-to-llvm (lib/Conversion/JaspToLLVM)
   v
 LLVM-dialect QIR calls mixed with func/scf/math/arith
   |
@@ -46,7 +46,7 @@ QIR-compliant LLVM-dialect module (ready for mlir-translate)
 There are five stages to the pipeline:
 1. Jasp's `jaspr.to_mlir(lower_stablehlo=True)` gives MLIR code that contains
    the custom Jasp dialect, as well as func/scf/math/arith/tensor dialects. The
-   first custom pass (`--lower-jasp-to-qir`) converts the Jasp-dialect
+   first custom pass (`--convert-jasp-to-llvm`) converts the Jasp-dialect
    operations/types to LLVM-dialect, matching the QIR spec.
 2. Quantinuum has an undocumented restriction: qubits cannot be allocated inside
    helper functions. To get around this, we inline all functions on the MLIR
@@ -68,13 +68,14 @@ generated between each stage.
 | ---- | ----------- |
 | `tools/jasp_to_qir.py`                         | Python wrapper for the lowering pipeline. |
 | `tools/jasp-to-qir.cpp`                        | Main module: registers passes and dialects. |
-| `include/JaspToQIR/Conversion/LowerJaspToQIR`  | Public interface for the Jasp lowering pass. |
-| `include/JaspToQIR/Conversion/MathForQIR`      | Public interface for the Math compatibility pass. |
-| `include/JaspToQIR/Transforms/FinalizeQIRLLVM` | Public interface for the QIR finalization pass. |
 | `include/JaspToQIR/Dialect/Jasp/IR`            | Vendored TableGen definitions and public Jasp dialect header. |
+| `include/JaspToQIR/Conversion/JaspToLLVM`      | Public interface for the `--convert-jasp-to-llvm` pass. |
+| `include/JaspToQIR/Conversion/MathForQIR`      | Public interface for the `--convert-math-for-qir` pass. |
+| `include/JaspToQIR/Transforms/FinalizeQIRLLVM` | Public interface for the `--finalize-qir-llvm` pass. |
 | `lib/Dialect/Jasp/IR`                          | Registers the generated Jasp operations and types. |
-| `lib/Conversion/LowerJaspToQIR`                | Contains the `--lower-jasp-to-qir` pass. |
-| `lib/Transforms/FinalizeQIRLLVM`               | Contains the `--finalize-qir-llvm` pass. |
+| `lib/Conversion/JaspToLLVM`                    | Implements the `--convert-jasp-to-llvm` pass. |
+| `lib/Conversion/MathForQIR`                    | Implements the `--convert-math-for-qir` pass. |
+| `lib/Transforms/FinalizeQIRLLVM`               | Implements the `--finalize-qir-llvm` pass. |
 
 ## Jasp dialect registration
 
