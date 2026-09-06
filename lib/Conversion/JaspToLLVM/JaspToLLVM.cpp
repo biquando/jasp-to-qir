@@ -1,4 +1,5 @@
 #include "JaspToQIR/Conversion/JaspToLLVM/JaspToLLVM.h"
+#include <optional>
 
 #include "JaspToQIR/Dialect/Jasp/IR/JaspOps.h"
 #include "JaspToLLVMInternal.h"
@@ -20,7 +21,40 @@ using namespace mlir;
 namespace {
 
 namespace jasp_ir = ::jasp;
-namespace lowering = mlir::jasp::internal;
+using namespace mlir::jasp::internal;
+
+std::optional<ResourceManagement> parseResourceManagement(llvm::StringRef value) {
+    if (value == "static") {
+        return ResourceManagement::Static;
+    }
+    if (value == "dynamic") {
+        return ResourceManagement::Dynamic;
+    }
+    return std::nullopt;
+}
+
+std::optional<std::set<OutputFormat>> parseOutputFormats(llvm::StringRef value) {
+    std::set<llvm::StringRef> formatStrings;
+    while (value.contains(',')) {
+        auto [s1, s2] = value.split(',');
+        formatStrings.insert(s1);
+        value = s2;
+    }
+    formatStrings.insert(value);
+
+    std::set<OutputFormat> formats;
+    for (const llvm::StringRef &format : formatStrings) {
+        if (format == "bitstring") {
+            formats.insert(OutputFormat::Bitstring);
+        } else if (format == "integer") {
+            formats.insert(OutputFormat::Integer);
+        } else {
+            return std::nullopt;
+        }
+    }
+    return formats;
+}
+
 
 struct JaspToLLVMPass final
     : PassWrapper<JaspToLLVMPass, OperationPass<ModuleOp>> {
@@ -30,6 +64,7 @@ struct JaspToLLVMPass final
     JaspToLLVMPass(const JaspToLLVMPass &other) : PassWrapper(other)
     {
         resourceManagement = other.resourceManagement;
+        outputFormats = other.outputFormats;
         resultBufferSize = other.resultBufferSize;
     }
 
@@ -42,8 +77,14 @@ struct JaspToLLVMPass final
     Option<std::string> resourceManagement{
         *this,
         "resource-management",
-        llvm::cl::desc("QIR resource management mode: static or dynamic"),
+        llvm::cl::desc("QIR resource management mode: static, dynamic"),
         llvm::cl::init("dynamic")};
+
+    Option<std::string> outputFormats{
+        *this,
+        "output-formats",
+        llvm::cl::desc("QIR output formats, comma-separated: bitstring, integer"),
+        llvm::cl::init("bitstring,integer")};
 
     Option<int64_t> resultBufferSize{
         *this,
@@ -61,11 +102,20 @@ struct JaspToLLVMPass final
                             scf::SCFDialect,
                             tensor::TensorDialect>();
 
-        std::optional<lowering::ResourceManagement> parsedResourceManagement =
-            lowering::parseResourceManagement(resourceManagement);
+        std::optional<ResourceManagement> parsedResourceManagement =
+            parseResourceManagement(resourceManagement);
         if (!parsedResourceManagement) {
             getOperation().emitError()
                 << "resource-management must be 'static' or 'dynamic'";
+            signalPassFailure();
+            return;
+        }
+
+        std::optional<std::set<OutputFormat>> parsedOutputFormats =
+            parseOutputFormats(outputFormats);
+        if (!parsedOutputFormats) {
+            getOperation().emitError()
+                << "output-formats must be a comma-separated list of 'bitstring', 'integer'";
             signalPassFailure();
             return;
         }
@@ -77,17 +127,18 @@ struct JaspToLLVMPass final
             return;
         }
 
-        lowering::JaspToLLVMOptions options{*parsedResourceManagement,
-                                           resultBufferSize};
-        FailureOr<lowering::JaspToLLVMModuleInfo> moduleInfo =
-            lowering::prepareJaspToLLVMModule(getOperation(), options);
+        JaspToLLVMOptions options{*parsedResourceManagement,
+                                  *parsedOutputFormats,
+                                  resultBufferSize};
+        FailureOr<JaspToLLVMModuleInfo> moduleInfo =
+            prepareJaspToLLVMModule(getOperation(), options);
         if (failed(moduleInfo)) {
             signalPassFailure();
             return;
         }
 
         std::unique_ptr<TypeConverter> converter =
-            lowering::createJaspToLLVMTypeConverter(context, options);
+            createJaspToLLVMTypeConverter(context, options);
         ConversionTarget target(context);
         target.addLegalDialect<BuiltinDialect, LLVM::LLVMDialect>();
         target.addIllegalDialect<jasp_ir::JaspDialect, tensor::TensorDialect>();
@@ -109,15 +160,15 @@ struct JaspToLLVMPass final
         });
 
         RewritePatternSet patterns(&context);
-        lowering::populateQubitManagementPatterns(
+        populateQubitManagementPatterns(
             *converter, patterns, options, *moduleInfo);
-        lowering::populateQubitArrayOperationPatterns(
+        populateQubitArrayOperationPatterns(
             *converter, patterns, options);
-        lowering::populateQuantumGatePatterns(*converter, patterns);
-        lowering::populateMeasurementPatterns(
+        populateQuantumGatePatterns(*converter, patterns);
+        populateMeasurementPatterns(
             *converter, patterns, options, *moduleInfo);
-        lowering::populateResetPatterns(*converter, patterns, options);
-        lowering::populateScalarizationPatterns(*converter, patterns);
+        populateResetPatterns(*converter, patterns, options);
+        populateScalarizationPatterns(*converter, patterns);
 
         populateFunctionOpInterfaceTypeConversionPattern<func::FuncOp>(
             patterns, *converter);

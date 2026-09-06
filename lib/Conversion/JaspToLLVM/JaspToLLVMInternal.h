@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <memory>
 #include <optional>
+#include <set>
 
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/StringRef.h"
@@ -16,8 +17,14 @@ enum class ResourceManagement {
     Dynamic,
 };
 
+enum class OutputFormat {
+    Bitstring,
+    Integer,
+};
+
 struct JaspToLLVMOptions {
     ResourceManagement resourceManagement = ResourceManagement::Static;
+    std::set<OutputFormat> outputFormats = {OutputFormat::Bitstring, OutputFormat::Integer};
     int64_t resultBufferSize = 64;
 
     bool isDynamic() const
@@ -70,10 +77,9 @@ struct JaspToLLVMModuleInfo {
     }
 };
 
-std::optional<ResourceManagement>
-parseResourceManagement(llvm::StringRef value);
-llvm::StringRef
-stringifyResourceManagement(ResourceManagement resourceManagement);
+std::optional<ResourceManagement> parseResourceManagement(llvm::StringRef value);
+std::optional<std::set<OutputFormat>> parseOutputFormat(llvm::StringRef value);
+llvm::StringRef stringifyResourceManagement(ResourceManagement resourceManagement);
 
 FailureOr<JaspToLLVMModuleInfo>
 prepareJaspToLLVMModule(ModuleOp module, const JaspToLLVMOptions &options);

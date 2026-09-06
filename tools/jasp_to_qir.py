@@ -111,6 +111,7 @@ def convert(
     output_path: Path,
     keep_intermediates: bool = False,
     resource_management: str = "dynamic",
+    output_formats: str = "bitstring,integer",
     result_buffer_size: int = 64,
 ) -> None:
     stem = output_path.with_suffix("")
@@ -128,6 +129,7 @@ def convert(
             input_path,
             "--convert-jasp-to-llvm="
             f"resource-management={resource_management} "
+            f"output-formats={output_formats} "
             f"result-buffer-size={result_buffer_size}",
             "-o", nojasp_mlir,
         )
@@ -202,6 +204,14 @@ def main() -> None:
         action="store_true",
         help="use static qubit/result allocation",
     )
+    FORMAT_OPTIONS = ("bitstring", "integer")
+    parser.add_argument(
+        "--format",
+        dest="formats",
+        action="append",
+        choices=FORMAT_OPTIONS,
+        help="asdf",
+    )
     parser.add_argument(
         "--result-buffer-size",
         type=int,
@@ -216,6 +226,7 @@ def main() -> None:
             args.output,
             args.keep_intermediates,
             "static" if args.static else "dynamic",
+            ','.join(FORMAT_OPTIONS if args.formats is None else args.formats),
             args.result_buffer_size,
         )
 

@@ -119,20 +119,7 @@ void setModuleAttributes(ModuleOp module,
 
 } // namespace
 
-std::optional<ResourceManagement> parseResourceManagement(llvm::StringRef value)
-{
-    if (value == "static") {
-        return ResourceManagement::Static;
-    }
-    if (value == "dynamic") {
-        return ResourceManagement::Dynamic;
-    }
-    return std::nullopt;
-}
-
-llvm::StringRef
-stringifyResourceManagement(ResourceManagement resourceManagement)
-{
+llvm::StringRef stringifyResourceManagement(ResourceManagement resourceManagement) {
     switch (resourceManagement) {
     case ResourceManagement::Static:
         return "static";
@@ -142,9 +129,8 @@ stringifyResourceManagement(ResourceManagement resourceManagement)
     llvm_unreachable("unknown resource management mode");
 }
 
-FailureOr<JaspToLLVMModuleInfo>
-prepareJaspToLLVMModule(ModuleOp module, const JaspToLLVMOptions &options)
-{
+
+FailureOr<JaspToLLVMModuleInfo> prepareJaspToLLVMModule(ModuleOp module, const JaspToLLVMOptions &options) {
     JaspToLLVMModuleInfo moduleInfo;
     moduleInfo.features.hasBackwardsBranching = options.isDynamic();
     int64_t functionCount = 0;
