@@ -42,6 +42,11 @@ struct LowerMeasure final : OpConversionPattern<::jasp::MeasureOp> {
 
         Value qubits = adaptor.getMeasQ().front();
         QIRBuilder qir(rewriter, operation.getLoc());
+        if (options.requireMcmr) {
+            Type pointerType = LLVM::LLVMPointerType::get(rewriter.getContext());
+            qir.getOrDeclareFunction("__quantum__qis__reset__body", pointerType);
+            qir.getOrDeclareFunction("__quantum__qis__x__body", pointerType);
+        }
 
         if (isa<LLVM::LLVMPointerType>(qubits.getType())) {
             Value bit;
@@ -60,6 +65,9 @@ struct LowerMeasure final : OpConversionPattern<::jasp::MeasureOp> {
                 bit = qir.measureStaticQubit(qubits, resultRange->base);
             }
 
+            if (options.requireMcmr) {
+                qir.restoreMeasuredQubit(qubits, bit);
+            }
             rewriter.replaceOp(operation, bit);
             return success();
         }
@@ -104,6 +112,9 @@ struct LowerMeasure final : OpConversionPattern<::jasp::MeasureOp> {
                                           result,
                                           TypeRange{builder.getI1Type()})
                             .getResult();
+                    if (options.requireMcmr) {
+                        loopQir.restoreMeasuredQubit(qubit, bit);
+                    }
                     Value extended = LLVM::ZExtOp::create(
                         builder, location, builder.getI64Type(), bit);
                     Value shifted =
@@ -144,6 +155,9 @@ struct LowerMeasure final : OpConversionPattern<::jasp::MeasureOp> {
                 rewriter, operation.getLoc(), pointerType, id);
             Value bit =
                 qir.measureStaticQubit(qubit, resultRange->base + index);
+            if (options.requireMcmr) {
+                qir.restoreMeasuredQubit(qubit, bit);
+            }
             Value extended = LLVM::ZExtOp::create(
                 rewriter, operation.getLoc(), rewriter.getI64Type(), bit);
             Value shifted = LLVM::ShlOp::create(

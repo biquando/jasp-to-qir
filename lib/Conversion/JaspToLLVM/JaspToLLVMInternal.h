@@ -26,6 +26,7 @@ struct JaspToLLVMOptions {
     ResourceManagement resourceManagement = ResourceManagement::Static;
     std::set<OutputFormat> outputFormats = {OutputFormat::Bitstring, OutputFormat::Integer};
     int64_t resultBufferSize = 64;
+    bool requireMcmr = false;
 
     bool isDynamic() const
     {

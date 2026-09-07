@@ -10,12 +10,14 @@ Jasp into their scalar values.
 
 ## Configuration
 
-This pass exposes two options:
+This pass exposes four options:
 
 | Option | Default | Description |
 | ------ | ------- | ----------- |
 | `resource-management` | `static` | Selects static resource IDs or dynamic allocation of qubits and results. The other option is `dynamic`. |
-| `result-buffer-size`  | `64`     | In dynamic mode, the size of the resource buffer must be statically-determined. This option is that size, and represents the maximum bitsize of a measurement. |
+| `output-formats` | `bitstring,integer` | Selects which QIR output formats to use for measurements. Specified as a comma-separated string. Options are `bitstring` and `integer`. |
+| `result-buffer-size` | `64` | In dynamic mode, the size of the resource buffer must be statically-determined. This option is that size, and represents the maximum bitsize of a measurement. |
+| `require-mcmr` | `false` | Reset and restore each qubit after measurement. Necessary for targets that require initialization before reuse, such as Helios. |
 
 ## Module analysis
 
@@ -94,6 +96,12 @@ for the buffer, which can be access from any function. Then every array
 measurement uses an scf for loop to write measurement results into the buffer
 through the global alias. Then left-shifts and ORs are used to pack the results
 into an `i64`.
+
+#### MCMR
+
+Some backends (e.g. Helios) require resetting a qubit after it's measured. If
+`require-mcmr=true` is set, then we emit a reset and conditionally restore the
+qubit's value with `scf.if` and `X` based on the measurement value.
 
 ## Quantum gates
 

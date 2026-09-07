@@ -1,6 +1,7 @@
 #include "QIRBuilder.h"
 
 #include "llvm/ADT/Twine.h"
+#include "mlir/Dialect/SCF/IR/SCF.h"
 #include "mlir/IR/BuiltinOps.h"
 
 using namespace mlir;
@@ -172,6 +173,19 @@ Value QIRBuilder::measureStaticQubit(Value qubit, int64_t resultId)
                 result,
                 TypeRange{builder.getI1Type()})
         .getResult();
+}
+
+void QIRBuilder::restoreMeasuredQubit(Value qubit, Value bit)
+{
+    // Reset before reuse, then restore Jasp's post-measurement state.
+    // Callers declare these functions before building any enclosing SCF loop.
+    callDeclared("__quantum__qis__reset__body", qubit);
+    scf::IfOp::create(builder, location, bit,
+                     [&](OpBuilder &thenBuilder, Location thenLocation) {
+                         QIRBuilder(thenBuilder, thenLocation)
+                             .callDeclared("__quantum__qis__x__body", qubit);
+                         scf::YieldOp::create(thenBuilder, thenLocation);
+                     });
 }
 
 } // namespace mlir::jasp::internal

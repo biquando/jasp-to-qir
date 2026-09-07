@@ -113,6 +113,7 @@ def convert(
     resource_management: str = "dynamic",
     output_formats: str = "bitstring,integer",
     result_buffer_size: int = 64,
+    require_mcmr: bool = False,
 ) -> None:
     stem = output_path.with_suffix("")
     nojasp_mlir = stem.with_suffix(".1.nojasp.mlir")
@@ -130,7 +131,8 @@ def convert(
             "--convert-jasp-to-llvm="
             f"resource-management={resource_management} "
             f"output-formats={output_formats} "
-            f"result-buffer-size={result_buffer_size}",
+            f"result-buffer-size={result_buffer_size} "
+            f"require-mcmr={str(require_mcmr).lower()}",
             "-o", nojasp_mlir,
         )
 
@@ -218,6 +220,11 @@ def main() -> None:
         default=64,
         help="reusable dynamic result slots (default: 64)",
     )
+    parser.add_argument(
+        "--require-mcmr",
+        action="store_true",
+        help="reset and restore qubits after measurement for targets such as Helios",
+    )
     args = parser.parse_args()
 
     try:
@@ -228,6 +235,7 @@ def main() -> None:
             "static" if args.static else "dynamic",
             ','.join(FORMAT_OPTIONS if args.formats is None else args.formats),
             args.result_buffer_size,
+            args.require_mcmr,
         )
 
     except ValueError as error:

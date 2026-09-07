@@ -2,3 +2,4 @@ qir-qis==0.1.10
 qrisp[xdsl]==0.9.5
 qirrunner==0.9.5
 selene-sim==0.3.0
+qnexus==0.48.0

@@ -41,22 +41,30 @@ cmake -S . -B build -DMLIR_DIR=/opt/homebrew/opt/llvm@21/lib/cmake/mlir
 cmake --build build -j
 ```
 
+Set `LLVM_BIN` if LLVM 21 is not on `PATH`.
+
 Convert and validate one input:
 
 ```sh
-python3 tools/jasp_to_qir.py input.mlir output.ll
+LLVM_BIN=/opt/homebrew/opt/llvm@21/bin python3 tools/jasp_to_qir.py input.mlir output.ll
 ./venv/bin/python tools/validate_qir.py output.ll
 ```
 
-Set `LLVM_BIN` if LLVM 21 is not on `PATH`. Run all regressions with:
+Run all regressions with:
 
 ```sh
-./venv/bin/python tests/run_tests.py
+LLVM_BIN=/opt/homebrew/opt/llvm@21/bin ./venv/bin/python tests/run_tests.py
 ```
 
 Use `run_qir.py` to run a QIR file.
 ```sh
-python tools/run_qir.py <.ll file> <num_qubits>
+python tools/run_qir.py <.ll file> -q<num_qubits> -s<num_shots>
+```
+
+Use `run_qir_on_nexus.py` to run a QIR file on Quantinuum Nexus. **Do not run
+this unless the user specifically asks you to.**
+```sh
+python tools/run_qir_on_nexus.py <.ll file> -q<num_qubits> -s<num_shots>
 ```
 
 ## Implementation conventions

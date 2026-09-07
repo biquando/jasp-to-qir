@@ -60,13 +60,14 @@ There are five stages to the pipeline:
    to the actual `.ll` file in post-processing).
 
 Use `tools/jasp_to_qir.py --keep-intermediates` to keep the intermediate files
-generated between each stage.
+generated after each stage. The flag also emits one more intermediate file: the
+output of `mlir-translate`.
 
 ## Source files
 
 | Path | Description |
 | ---- | ----------- |
-| `tools/jasp_to_qir.py`                         | Python wrapper for the lowering pipeline. |
+| `tools/jasp_to_qir.py`                         | Python driver for the lowering pipeline. |
 | `tools/jasp-to-qir.cpp`                        | Main module: registers passes and dialects. |
 | `include/JaspToQIR/Dialect/Jasp/IR`            | Vendored TableGen definitions and public Jasp dialect header. |
 | `include/JaspToQIR/Conversion/JaspToLLVM`      | Public interface for the `--convert-jasp-to-llvm` pass. |
@@ -79,9 +80,9 @@ generated between each stage.
 
 ## Jasp dialect registration
 
-The Jasp dialect definitions come from Qrisp's provided TableGen files. The
-component CMake file generates the operation/type definitions from the TableGen
-files, which are then linked through `lib/Dialect/Jasp/IR/JaspOps.cpp`.
+The Jasp dialect definitions come from Qrisp's provided TableGen files. CMake
+generates the operation/type definitions from the TableGen files, which are then
+linked through `lib/Dialect/Jasp/IR/JaspOps.cpp`.
 
 See [Jasp Documentation](https://qrisp.eu/reference/Jasp/MLIR%20Interface.html#jasp-dialect-specification)
 for the full dialect specification.

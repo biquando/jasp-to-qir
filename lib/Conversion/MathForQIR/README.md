@@ -17,7 +17,7 @@ the SWAR parallel population count algorithm.
 
 ## `math.powf(2.0, int)`
 
-Qrisp's QFT generates MLIR code that includes a `math.powf` operations. This
+Qrisp's QFT generates MLIR code that includes a `math.powf` operation. This
 lowers to `llvm.intr.pow` by default, which isn't supported by QIR.
 
 A general implementation in arith-dialect would be complicated, but luckily QFT

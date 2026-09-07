@@ -31,6 +31,7 @@ class QIRBuilder {
     Value fixedPointerBuffer(int64_t count);
     Value dynamicPointerBuffer(Value count);
     Value measureStaticQubit(Value qubit, int64_t resultId);
+    void restoreMeasuredQubit(Value qubit, Value bit);
 
   private:
     OpBuilder &builder;
