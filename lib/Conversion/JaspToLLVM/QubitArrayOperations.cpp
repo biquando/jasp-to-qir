@@ -57,6 +57,19 @@ struct LowerGetQubit final : OpConversionPattern<jasp_ir::GetQubitOp> {
         Value offset = adaptor.getPosition();
         QIRBuilder qir(rewriter, operation.getLoc());
 
+        // Jasp follows Python indexing: -1 denotes the last qubit, including
+        // when the array is a slice or the index is computed at runtime.
+        Value size = LLVM::ExtractValueOp::create(
+            rewriter, operation.getLoc(), adaptor.getQbArray(),
+            ArrayRef<int64_t>{1});
+        Value negative = LLVM::ICmpOp::create(
+            rewriter, operation.getLoc(), LLVM::ICmpPredicate::slt,
+            offset, qir.constantI64(0));
+        Value adjusted = LLVM::AddOp::create(
+            rewriter, operation.getLoc(), offset, size);
+        offset = LLVM::SelectOp::create(
+            rewriter, operation.getLoc(), negative, adjusted, offset);
+
         if (options.resourceManagement == ResourceManagement::Dynamic) {
             rewriter.replaceOp(operation, qir.pointerElement(base, offset));
         } else {

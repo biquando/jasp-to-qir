@@ -75,6 +75,9 @@ Use `--result-buffer-size` to configure the maximum amount of qubits that can be
 measured at once, as well as the number of bits outputted with each measurement.
 The default is 64.
 
+Use `--require-mcmr` if compiling for a backend that requires resetting qubits
+after measurement, such as Helios.
+
 ## Simulating a QIR program
 
 Run a generated QIR file through qir-qis and Selene/QuEST:
