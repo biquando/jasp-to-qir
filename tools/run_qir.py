@@ -2,6 +2,7 @@
 """Compile textual QIR with qir-qis and run one shot with Selene/QuEST."""
 
 import argparse
+from multiprocessing import cpu_count
 import platform
 from pathlib import Path
 
@@ -34,7 +35,10 @@ def output_to_str(label, value) -> str:
 
 
 if args.shots is not None:
-    results = runner.run_shots(Quest(), n_qubits=args.qubits, n_shots=args.shots)
+    results = runner.run_shots(Quest(),
+                               n_qubits=args.qubits,
+                               n_shots=args.shots,
+                               n_processes=cpu_count())
     for i, shot in enumerate(results):
         print(f'===== SHOT {i+1} =====')
         for label, value in shot:
