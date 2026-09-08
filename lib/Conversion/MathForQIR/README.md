@@ -6,6 +6,16 @@ which are not supported by QIR.
 
 It performs the following transformations:
 
+## `math.log`
+
+Jasp's implementation of the Montgomery multiplier involves a $\log_2$ operation
+in order to determine the size of a qubit register. Specifically, Qrisp's
+`smallest_power_of_two` helper emits the expression `n <= 1 ? 0 :
+i64(ceil(log(f64(n)) / log(2.0)))`.
+
+We match this specific pattern and replace it with a custom implementation using
+integers and bitwise operations.
+
 ## `math.ctpop`
 
 This operation counts the number of set bits in an integer, short for "count
