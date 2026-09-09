@@ -13,14 +13,15 @@ pipeline. The detailed descriptions of each custom lowering pass are in:
 ```text
 Qrisp/Jasp-generated MLIR with StableHLO already lowered to scf/math/arith/tensor
   |
+  | --inline
+  | --canonicalize
+  | --symbol-dce
+  v
+Inlined MLIR functions
+  |
   | --convert-jasp-to-llvm (lib/Conversion/JaspToLLVM)
   v
 LLVM-dialect QIR calls mixed with func/scf/math/arith
-  |
-  | --canonicalize
-  | --inline
-  v
-Inlined MLIR functions
   |
   | --canonicalize
   | --convert-math-for-qir (lib/Conversion/MathForQIR)
@@ -45,13 +46,11 @@ QIR-compliant LLVM-dialect module (ready for mlir-translate)
 
 There are five stages to the pipeline:
 1. Jasp's `jaspr.to_mlir(lower_stablehlo=True)` gives MLIR code that contains
-   the custom Jasp dialect, as well as func/scf/math/arith/tensor dialects. The
-   first custom pass (`--convert-jasp-to-llvm`) converts the Jasp-dialect
+   the custom Jasp dialect, as well as func/scf/math/arith/tensor dialects. We
+   first inline the MLIR functions.
+2. The first custom pass (`--convert-jasp-to-llvm`) converts the Jasp-dialect
    operations/types to LLVM-dialect, matching the QIR spec.
-2. Quantinuum has an undocumented restriction: qubits cannot be allocated inside
-   helper functions. To get around this, we inline all functions on the MLIR
-   level.
-3. This is the second custom pass.Some math operations emitted by Jasp lower to
+3. This is the second custom pass. Some math operations emitted by Jasp lower to
    `llvm.intr.*` operations, which are not supported by QIR. We add a new pass
    that lowers these operations specifically.
 4. We lower func/scf/math/arith down to LLVM-dialect to prepare for QIR output.

@@ -116,18 +116,27 @@ def convert(
     require_mcmr: bool = False,
 ) -> None:
     stem = output_path.with_suffix("")
-    nojasp_mlir = stem.with_suffix(".1.nojasp.mlir")
-    inline_mlir = stem.with_suffix(".2.inline.mlir")
+    inline_mlir = stem.with_suffix(".1.inline.mlir")
+    nojasp_mlir = stem.with_suffix(".2.nojasp.mlir")
     qirmath_mlir = stem.with_suffix(".3.qirmath.mlir")
     llvm_mlir = stem.with_suffix(".4.llvm.mlir")
     qir_mlir = stem.with_suffix(".5.qir.mlir")
     raw_llvm = stem.with_suffix(".6.raw.ll")
 
-    intermediates = (nojasp_mlir, inline_mlir, qirmath_mlir, llvm_mlir, qir_mlir, raw_llvm)
+    intermediates = (inline_mlir, nojasp_mlir, qirmath_mlir, llvm_mlir, qir_mlir, raw_llvm)
     try:
         run(
             JASP_OPT,
             input_path,
+            "--inline",
+            "--canonicalize",
+            "--symbol-dce",
+            "-o", inline_mlir,
+        )
+
+        run(
+            JASP_OPT,
+            inline_mlir,
             "--convert-jasp-to-llvm="
             f"resource-management={resource_management} "
             f"output-formats={output_formats} "
@@ -139,14 +148,6 @@ def convert(
         run(
             JASP_OPT,
             nojasp_mlir,
-            "--canonicalize",
-            "--inline",
-            "-o", inline_mlir,
-        )
-
-        run(
-            JASP_OPT,
-            inline_mlir,
             "--canonicalize",
             "--convert-math-for-qir",
             "-o", qirmath_mlir
