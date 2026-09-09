@@ -68,6 +68,12 @@ LogicalResult prepareMain(ModuleOp module)
         return main.emitError("expected one Jasp state argument on @main");
     }
 
+    if (llvm::all_of(main.getResultTypes(), [](Type type) {
+            return isa<jasp_ir::QuantumStateType>(type);
+        })) {
+        mlir::emitWarning(main.getLoc(), "main has no return values besides the quantum state");
+    }
+
     OpBuilder builder(main.getContext());
     main.setFunctionType(
         builder.getFunctionType(main.getArgumentTypes(), builder.getI64Type()));

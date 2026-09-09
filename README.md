@@ -29,7 +29,8 @@ pip install -r requirements.txt
 
 ## Usage
 
-Create a Qrisp/Jasp program, and output MLIR:
+Create a Qrisp/Jasp program. The return value of the main Jasp function will be
+used as output. Convert the Jasp to MLIR, making sure to lower StableHLO:
 
 ```python
 # bell.py
@@ -56,30 +57,25 @@ Run your python program to output the MLIR file:
 python bell.py
 ```
 
-Convert Jasp MLIR to QIR with **dynamic** qubit/result management and **array**
-support, the default:
+Convert Jasp-dialect MLIR to QIR:
 
 ```sh
 python tools/jasp_to_qir.py bell.mlir bell.ll
 ```
-
-Or emit QIR with **static** qubit/result management and **no array** support:
-
-```sh
-python tools/jasp_to_qir.py --static bell.mlir bell.ll
-```
-
-Use `--keep-intermediates` to retain the generated intermediate files.
-
-Use `--result-buffer-size` to configure the maximum amount of qubits that can be
-measured at once, as well as the number of bits outputted with each measurement.
-The default is 64.
 
 Use `--require-mcmr` if compiling for a backend that requires resetting qubits
 after measurement, such as Helios.
 
 Use `--verbose` to print out all measurement results, rather than the default of
 just printing values returned from the main Jasp function.
+
+Use `--result-buffer-size` to configure the maximum amount of qubits that can be
+measured at once. The default is 64.
+
+Use `--keep-intermediates` to retain the generated intermediate files.
+
+Use `--static` to use static qubit/result allocation, if possible. Note that
+only the most simple Qrisp/Jasp programs are compatible with this flag.
 
 ## Simulating a QIR program
 
