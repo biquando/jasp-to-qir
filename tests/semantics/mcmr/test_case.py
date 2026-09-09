@@ -15,7 +15,7 @@ class MeasurementRestorationTest(unittest.TestCase):
                 with self.subTest(mode=mode, require_mcmr=enabled):
                     work = Path(tempfile.mkdtemp(dir=support.temp_dir()))
                     output = work / 'output.ll'
-                    command = [sys.executable, support.DRIVER,
+                    command = [sys.executable, support.DRIVER, "--verbose",
                                Path(__file__).with_name('input.mlir'), output]
                     if mode == 'static':
                         command.append('--static')
@@ -27,6 +27,7 @@ class MeasurementRestorationTest(unittest.TestCase):
                                      enabled)
                     runner = build(output, build_dir=work / 'selene')
                     entries = list(runner.run(simulator=Quest(), n_qubits=2))
+                    self.assertTrue(all(label.startswith("measurement_") for label, _ in entries))
                     bits = support.selene_result_bits(entries, (1, 1, 2, 2),
                                                       'mcmr', mode)
                     self.assertEqual(bits, [0, 1, 1, 0, 0, 1])

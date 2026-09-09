@@ -25,7 +25,7 @@ struct LowerMeasure final : OpConversionPattern<::jasp::MeasureOp> {
           moduleInfo(moduleInfo)
     {}
 
-    /// Lowers scalar and array measurements, records their output immediately,
+    /// Lowers scalar and array measurements, optionally records their output,
     /// and produces the classical value. Dynamic measurements share one
     /// fixed-size result buffer allocated in the QIR entry block.
     LogicalResult
@@ -56,13 +56,15 @@ struct LowerMeasure final : OpConversionPattern<::jasp::MeasureOp> {
                     qir.pointerElement(resultBuffer, qir.constantI64(0));
                 qir.call("__quantum__qis__mz__body",
                          ValueRange{qubits, result});
-                qir.recordResult(result, resultRange->base);
+                if (options.verbose) {
+                    qir.recordResult(result, resultRange->base);
+                }
                 bit = qir.call("__quantum__rt__read_result",
                                ValueRange{result},
                                TypeRange{rewriter.getI1Type()})
                           .getResult();
             } else {
-                bit = qir.measureStaticQubit(qubits, resultRange->base);
+                bit = qir.measureStaticQubit(qubits, resultRange->base, options.verbose);
             }
 
             if (options.requireMcmr) {
@@ -128,14 +130,14 @@ struct LowerMeasure final : OpConversionPattern<::jasp::MeasureOp> {
             Value capacity = qir.constantI64(options.resultBufferSize);
 
             auto formats = options.outputFormats;
-            if (formats.find(OutputFormat::Bitstring) != formats.end()) {
+            if (options.verbose && formats.find(OutputFormat::Bitstring) != formats.end()) {
                 qir.call("__quantum__rt__result_array_record_output", ValueRange{
                         capacity,
                         resultBuffer,
                         qir.outputLabel(resultRange->base)
                         });
             }
-            if (formats.find(OutputFormat::Integer) != formats.end()) {
+            if (options.verbose && formats.find(OutputFormat::Integer) != formats.end()) {
                 qir.call("__quantum__rt__int_record_output", ValueRange{
                         packed,
                         qir.outputLabel(resultRange->base)
@@ -154,7 +156,7 @@ struct LowerMeasure final : OpConversionPattern<::jasp::MeasureOp> {
             Value qubit = LLVM::IntToPtrOp::create(
                 rewriter, operation.getLoc(), pointerType, id);
             Value bit =
-                qir.measureStaticQubit(qubit, resultRange->base + index);
+                qir.measureStaticQubit(qubit, resultRange->base + index, options.verbose);
             if (options.requireMcmr) {
                 qir.restoreMeasuredQubit(qubit, bit);
             }

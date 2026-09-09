@@ -10,13 +10,14 @@ Jasp into their scalar values.
 
 ## Configuration
 
-This pass exposes four options:
+This pass exposes five options:
 
 | Option | Default | Description |
 | ------ | ------- | ----------- |
 | `resource-management` | `static` | Selects static resource IDs or dynamic allocation of qubits and results. The other option is `dynamic`. |
 | `output-formats` | `bitstring,integer` | Selects which QIR output formats to use for measurements. Specified as a comma-separated string. Options are `bitstring` and `integer`. |
 | `result-buffer-size` | `64` | In dynamic mode, the size of the resource buffer must be statically-determined. This option is that size, and represents the maximum bitsize of a measurement. |
+| `verbose` | `false` | Record intermediate measurements with `measurement_<n>` labels. |
 | `require-mcmr` | `false` | Reset and restore each qubit after measurement. Necessary for targets that require initialization before reuse, such as Helios. |
 
 ## Module analysis
@@ -76,8 +77,18 @@ range of integers.
   be assigned the range `[20, 24]`.
 - In dynamic mode, the range consists of only a single integer.
 
-For now, every measurement result is outputted. The starting number `N` in each
-range `[N, M]` is used in the output label, i.e. `result_N`.
+By default, only classical scalar values returned by `main` are outputted:
+`i1` (bool), `i64` (int), and `f64` (float), including rank-zero tensor wrappers.
+They are recorded before each return in operand order with labels `result_0`,
+`result_1`, etc. Unsupported return values are skipped with a warning;
+the internal `QuantumState` return is discarded silently.
+
+With `verbose=true` (driver option `--verbose`), intermediate measurements are
+also recorded. Their labels use `measurement_N`, where `N` is the starting
+result index. The `output-formats` option controls verbose dynamic array
+measurement records; main return values are recorded according to their types.
+Measurement values are read into classical SSA values before result slots can
+be reused, so returning an earlier measurement preserves its original value.
 
 Since Quantinuum's QIR does not support array measurement, we must emit
 `@__quantum__qis__mz__body` for each qubit in the array. The details of how

@@ -67,6 +67,7 @@ struct JaspToLLVMPass final
         outputFormats = other.outputFormats;
         resultBufferSize = other.resultBufferSize;
         requireMcmr = other.requireMcmr;
+        verbose = other.verbose;
     }
 
     StringRef getArgument() const final { return "convert-jasp-to-llvm"; }
@@ -97,6 +98,11 @@ struct JaspToLLVMPass final
         *this,
         "require-mcmr",
         llvm::cl::desc("Reset and restore qubits after measurement"),
+        llvm::cl::init(false)};
+
+    Option<bool> verbose{
+        *this, "verbose",
+        llvm::cl::desc("Record all intermediate measurement results"),
         llvm::cl::init(false)};
 
     void runOnOperation() override
@@ -137,7 +143,8 @@ struct JaspToLLVMPass final
         JaspToLLVMOptions options{*parsedResourceManagement,
                                   *parsedOutputFormats,
                                   resultBufferSize,
-                                  requireMcmr};
+                                  requireMcmr,
+                                  verbose};
         FailureOr<JaspToLLVMModuleInfo> moduleInfo =
             prepareJaspToLLVMModule(getOperation(), options);
         if (failed(moduleInfo)) {

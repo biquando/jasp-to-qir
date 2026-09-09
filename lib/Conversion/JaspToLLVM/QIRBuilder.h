@@ -23,14 +23,14 @@ class QIRBuilder {
 
     Value constantI64(int64_t value);
     Value qubitArray(ResourceManagement resourceManagement, Value base, Value size);
-    Value outputLabel(int64_t index);
+    Value outputLabel(int64_t index, StringRef prefix = "measurement_");
     void recordResult(Value result, int64_t outputIndex);
     Value pointerAddress(Value buffer, Value index);
     Value pointerElement(Value buffer, Value index);
     void storePointerElement(Value value, Value buffer, Value index);
     Value fixedPointerBuffer(int64_t count);
     Value dynamicPointerBuffer(Value count);
-    Value measureStaticQubit(Value qubit, int64_t resultId);
+    Value measureStaticQubit(Value qubit, int64_t resultId, bool verbose);
     void restoreMeasuredQubit(Value qubit, Value bit);
 
   private:

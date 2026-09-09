@@ -59,7 +59,7 @@ class LcuRusTest(unittest.TestCase):
 
         # The generated LCU helpers allocate runtime-sized registers, requiring
         # dynamic mode. Four live qubits suffice regardless of the retry count.
-        qir = support.output(Path(__file__).parent, 'dynamic')
+        qir = support.output(Path(__file__).parent, 'dynamic', verbose=True)
         runner = build(qir, build_dir=qir.parent / 'selene')
         rows = []
         for shot in range(shots):
@@ -67,6 +67,9 @@ class LcuRusTest(unittest.TestCase):
                 entries = list(runner.run(
                     simulator=Quest(random_seed=7 + shot), n_qubits=4, timeout=30.0,
                 ))
+                self.assertEqual(entries[-1], ("result_0", 0))
+                entries = entries[:-1]
+                self.assertTrue(all(label.startswith("measurement_") for label, _ in entries))
                 bits = support.selene_result_bits(
                     entries, (1,) * len(entries), 'LCU/RUS', 'dynamic',
                 )

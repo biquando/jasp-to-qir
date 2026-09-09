@@ -114,6 +114,7 @@ def convert(
     output_formats: str = "bitstring,integer",
     result_buffer_size: int = 64,
     require_mcmr: bool = False,
+    verbose: bool = False,
 ) -> None:
     stem = output_path.with_suffix("")
     inline_mlir = stem.with_suffix(".1.inline.mlir")
@@ -141,7 +142,8 @@ def convert(
             f"resource-management={resource_management} "
             f"output-formats={output_formats} "
             f"result-buffer-size={result_buffer_size} "
-            f"require-mcmr={str(require_mcmr).lower()}",
+            f"require-mcmr={str(require_mcmr).lower()} "
+            f"verbose={str(verbose).lower()}",
             "-o", nojasp_mlir,
         )
 
@@ -226,6 +228,10 @@ def main() -> None:
         action="store_true",
         help="reset and restore qubits after measurement for targets such as Helios",
     )
+    parser.add_argument(
+        "--verbose", action="store_true",
+        help="also record all intermediate measurement results",
+    )
     args = parser.parse_args()
 
     try:
@@ -237,6 +243,7 @@ def main() -> None:
             ','.join(FORMAT_OPTIONS if args.formats is None else args.formats),
             args.result_buffer_size,
             args.require_mcmr,
+            args.verbose,
         )
 
     except ValueError as error:

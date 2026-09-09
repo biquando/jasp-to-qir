@@ -93,12 +93,12 @@ Value QIRBuilder::qubitArray(ResourceManagement resourceManagement,
         builder, location, array, size, ArrayRef<int64_t>{1});
 }
 
-Value QIRBuilder::outputLabel(int64_t index)
+Value QIRBuilder::outputLabel(int64_t index, StringRef prefix)
 {
     ModuleOp module = getEnclosingModule(builder);
-    std::string name = (llvm::Twine("label") + llvm::Twine(index)).str();
+    std::string name = (llvm::Twine(prefix) + llvm::Twine(index)).str();
     if (!module.lookupSymbol<LLVM::GlobalOp>(name)) {
-        std::string value = (llvm::Twine("result_") + llvm::Twine(index)).str();
+        std::string value = name;
         value.push_back('\0');
         Type type = LLVM::LLVMArrayType::get(builder.getI8Type(), value.size());
         OpBuilder::InsertionGuard guard(builder);
@@ -160,7 +160,7 @@ Value QIRBuilder::dynamicPointerBuffer(Value count)
         builder, location, pointerType, pointerType, count, 8);
 }
 
-Value QIRBuilder::measureStaticQubit(Value qubit, int64_t resultId)
+Value QIRBuilder::measureStaticQubit(Value qubit, int64_t resultId, bool verbose)
 {
     Value result = LLVM::IntToPtrOp::create(
         builder,
@@ -168,7 +168,9 @@ Value QIRBuilder::measureStaticQubit(Value qubit, int64_t resultId)
         LLVM::LLVMPointerType::get(builder.getContext()),
         constantI64(resultId));
     call("__quantum__qis__mz__body", ValueRange{qubit, result});
-    recordResult(result, resultId);
+    if (verbose) {
+        recordResult(result, resultId);
+    }
     return call("__quantum__rt__read_result",
                 result,
                 TypeRange{builder.getI1Type()})

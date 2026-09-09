@@ -78,6 +78,9 @@ The default is 64.
 Use `--require-mcmr` if compiling for a backend that requires resetting qubits
 after measurement, such as Helios.
 
+Use `--verbose` to print out all measurement results, rather than the default of
+just printing values returned from the main Jasp function.
+
 ## Simulating a QIR program
 
 Run a generated QIR file through qir-qis and Selene/QuEST:

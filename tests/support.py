@@ -216,7 +216,7 @@ def verify_qrisp_fixtures(temp: Path) -> None:
     print(f"PASS Qrisp fixture freshness ({len(fresh)} fixtures)")
 
 
-def convert_and_validate(fixture: Path, mode: str, temp: Path) -> Path:
+def convert_and_validate(fixture: Path, mode: str, temp: Path, *, verbose: bool = False) -> Path:
     """Convert one fixture, validate its QIR, and return the output path.
 
     Dynamic mode intentionally omits ``--static`` so the suite also
@@ -227,6 +227,8 @@ def convert_and_validate(fixture: Path, mode: str, temp: Path) -> Path:
     work = Path(tempfile.mkdtemp(prefix=f"convert-{fixture.parent.name}-{mode}-", dir=temp))
     output = work / "output.ll"
     command: list[str | Path] = [sys.executable, DRIVER]
+    if verbose:
+        command.append("--verbose")
     if mode == "static":
         command.extend(["--static"])
     command.extend([fixture, output])
@@ -236,10 +238,10 @@ def convert_and_validate(fixture: Path, mode: str, temp: Path) -> Path:
     return output
 
 
-def output(case_dir: Path, mode: str = "static") -> Path:
+def output(case_dir: Path, mode: str = "static", *, verbose: bool = False) -> Path:
     """Convert and validate a case in its own temporary directory."""
 
-    return convert_and_validate(fixture(case_dir), mode, temp_dir())
+    return convert_and_validate(fixture(case_dir), mode, temp_dir(), verbose=verbose)
 
 
 def load_case(path: Path):
@@ -503,7 +505,9 @@ def verify_measurement_case(
     for mode in RESOURCE_MODES:
         runner = build(output(case_dir, mode), build_dir=work / mode)
         entries = list(runner.run(simulator=Quest(random_seed=7), n_qubits=qubits))
-        bits = selene_result_bits(entries, widths, name, mode)
+        require([label for label, _ in entries] == [f"result_{i}" for i in range(len(widths))],
+                f"{name} ({mode}): unexpected return labels")
+        bits = qrisp_result_bits([value for _, value in entries], widths, name)
         require(bits == list(expected), f"{name} ({mode}): QIR produced {bits}, expected {expected}")
         results.append(bits)
     report_table(f"Measurement: {name}", ["Qrisp", "Static QIR", "Dynamic QIR"],

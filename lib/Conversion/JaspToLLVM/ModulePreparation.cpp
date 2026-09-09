@@ -2,9 +2,11 @@
 
 #include "JaspToQIR/Dialect/Jasp/IR/JaspOps.h"
 #include "JaspToLLVMInternal.h"
+#include "QIRBuilder.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/SCF/IR/SCF.h"
+#include "mlir/Dialect/Tensor/IR/Tensor.h"
 #include "mlir/IR/Matchers.h"
 
 using namespace mlir;
@@ -72,6 +74,36 @@ LogicalResult prepareMain(ModuleOp module)
 
     main.walk([&](func::ReturnOp returnOp) {
         OpBuilder returnBuilder(returnOp);
+        QIRBuilder qir(returnBuilder, returnOp.getLoc());
+        int64_t index = 0;
+        for (Value value : returnOp.getOperands()) {
+            Type type = value.getType();
+            if (isa<jasp_ir::QuantumStateType>(type)) {
+                continue;
+            }
+            if (auto tensor = dyn_cast<RankedTensorType>(type)) {
+                if (tensor.getRank() == 0) {
+                    type = tensor.getElementType();
+                }
+            }
+            StringRef function;
+            if (type.isInteger(1)) {
+                function = "__quantum__rt__bool_record_output";
+            } else if (type.isInteger(64)) {
+                function = "__quantum__rt__int_record_output";
+            } else if (type.isF64()) {
+                function = "__quantum__rt__double_record_output";
+            } else {
+                returnOp.emitWarning("skipping output for unsupported main return type: ")
+                    << value.getType() << "; expected bool, i64, or f64 scalar";
+                continue;
+            }
+            if (isa<RankedTensorType>(value.getType())) {
+                value = tensor::ExtractOp::create(
+                    returnBuilder, returnOp.getLoc(), value, ValueRange{});
+            }
+            qir.call(function, ValueRange{value, qir.outputLabel(index++, "result_")});
+        }
         Value exit =
             arith::ConstantOp::create(returnBuilder,
                                       returnOp.getLoc(),
