@@ -220,6 +220,7 @@ struct MathForQIRPass final
         patterns.add<LowerPowf>(ctx);
 
         ConversionTarget target(*ctx);
+        target.addIllegalOp<math::LogOp>();
         target.addIllegalOp<math::CtPopOp>();
         target.addIllegalOp<math::PowFOp>();
 

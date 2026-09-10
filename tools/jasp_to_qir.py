@@ -86,8 +86,8 @@ def set_qir_module_flags(profile: QirProfile, llvm_ir: str) -> str:
 !8 = !{{i32 1, !"arrays", i1 {dynamic}}}
 !9 = !{{i32 5, !"int_computations", !11}}
 !10 = !{{i32 5, !"float_computations", !12}}
-!11 = !{{!"i64"}}
-!12 = !{{{'!"double"' if profile.float_computations else ""}}}
+!11 = !{{!"i32", !"i64"}}
+!12 = !{{{'!"float", !"double"' if profile.float_computations else ""}}}
 """
 
 # Changes the first two lines of the generated QIR from
@@ -159,8 +159,10 @@ def convert(
             JASP_OPT,
             qirmath_mlir,
             "--canonicalize",
+            "--cse",
             "--symbol-dce",
             "--convert-scf-to-cf",
+            "--canonicalize", # remove empty cf blocks
             "--convert-cf-to-llvm",
             "--convert-math-to-llvm",
             "--convert-arith-to-llvm",

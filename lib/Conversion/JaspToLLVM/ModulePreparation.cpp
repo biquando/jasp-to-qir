@@ -177,6 +177,8 @@ FailureOr<JaspToLLVMModuleInfo> prepareJaspToLLVMModule(ModuleOp module, const J
     WalkResult analysis = module.walk([&](Operation *operation) {
         moduleInfo.features.hasBackwardsBranching |=
             isa<scf::ForOp, scf::ParallelOp, scf::WhileOp>(operation);
+        moduleInfo.features.hasBackwardsBranching |=
+            isa<jasp_ir::ResetOp>(operation); // HACK: static array resets require loops
         moduleInfo.features.hasMultipleTargetBranching |=
             isa<scf::IndexSwitchOp>(operation);
         for (Type type : operation->getOperandTypes()) {

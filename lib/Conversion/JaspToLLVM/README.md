@@ -77,18 +77,14 @@ range of integers.
   be assigned the range `[20, 24]`.
 - In dynamic mode, the range consists of only a single integer.
 
-By default, only classical scalar values returned by `main` are outputted:
-`i1` (bool), `i64` (int), and `f64` (float), including rank-zero tensor wrappers.
-They are recorded before each return in operand order with labels `result_0`,
-`result_1`, etc. Unsupported return values are skipped with a warning;
-the internal `QuantumState` return is discarded silently.
+By default, only classical scalar values returned by `main` are outputted: `i1`
+(bool), `i64` (int), and `f64` (float), including rank-zero tensor wrappers.
+They are recorded before each return with labels `result_n`. Unsupported return
+values (e.g. qubits) are skipped with a warning.
 
-With `verbose=true` (driver option `--verbose`), intermediate measurements are
-also recorded. Their labels use `measurement_N`, where `N` is the starting
-result index. The `output-formats` option controls verbose dynamic array
-measurement records; main return values are recorded according to their types.
-Measurement values are read into classical SSA values before result slots can
-be reused, so returning an earlier measurement preserves its original value.
+With `verbose=true`, intermediate measurements are also recorded with labels
+`measurement_N`. The `output-formats` option controls the format in which they
+are printed.
 
 Since Quantinuum's QIR does not support array measurement, we must emit
 `@__quantum__qis__mz__body` for each qubit in the array. The details of how
