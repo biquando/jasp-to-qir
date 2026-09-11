@@ -30,7 +30,7 @@ class QIRBuilder {
     void storePointerElement(Value value, Value buffer, Value index);
     Value fixedPointerBuffer(int64_t count);
     Value dynamicPointerBuffer(Value count);
-    Value measureStaticQubit(Value qubit, int64_t resultId, bool verbose);
+    Value measureStaticQubit(Value qubit, int64_t resultId, bool verbose, bool reset);
     void restoreMeasuredQubit(Value qubit, Value bit);
 
   private:

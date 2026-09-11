@@ -107,8 +107,9 @@ into an `i64`.
 #### MCMR
 
 Some backends (e.g. Helios) require resetting a qubit after it's measured. If
-`require-mcmr=true` is set, then we emit a reset and conditionally restore the
-qubit's value with `scf.if` and `X` based on the measurement value.
+`require-mcmr=true` is set, then we lower measurements to `mresetz` and
+conditionally restore the qubit's value with `scf.if` and `X` based on the
+measurement value.
 
 ## Quantum gates
 

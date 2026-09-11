@@ -160,6 +160,15 @@ LogicalResult addDeclarationAttributes(ModuleOp &module, OpBuilder &builder) {
     mz.setPassthroughAttr(buildAttributes(builder, {"irreversible"}, {}));
     mz.setArgAttrs(1, builder.getNamedAttr("llvm.writeonly", builder.getUnitAttr()));
   }
+  auto mresetz = module.lookupSymbol<LLVM::LLVMFuncOp>("__quantum__qis__mresetz__body");
+  if (mresetz) {
+    if (mresetz.getNumArguments() != 2) {
+      mresetz.emitError("expected mresetz to have two arguments");
+      return failure();
+    }
+    mresetz.setPassthroughAttr(buildAttributes(builder, {"irreversible"}, {}));
+    mresetz.setArgAttrs(1, builder.getNamedAttr("llvm.writeonly", builder.getUnitAttr()));
+  }
 
   // Read result's argument should be annotated as readonly.
   auto readResult = module.lookupSymbol<LLVM::LLVMFuncOp>("__quantum__rt__read_result");

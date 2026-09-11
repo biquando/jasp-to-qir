@@ -160,14 +160,18 @@ Value QIRBuilder::dynamicPointerBuffer(Value count)
         builder, location, pointerType, pointerType, count, 8);
 }
 
-Value QIRBuilder::measureStaticQubit(Value qubit, int64_t resultId, bool verbose)
+Value QIRBuilder::measureStaticQubit(Value qubit, int64_t resultId, bool verbose, bool reset)
 {
     Value result = LLVM::IntToPtrOp::create(
         builder,
         location,
         LLVM::LLVMPointerType::get(builder.getContext()),
         constantI64(resultId));
-    call("__quantum__qis__mz__body", ValueRange{qubit, result});
+    if (reset) {
+        call("__quantum__qis__mresetz__body", ValueRange{qubit, result});
+    } else {
+        call("__quantum__qis__mz__body", ValueRange{qubit, result});
+    }
     if (verbose) {
         recordResult(result, resultId);
     }
@@ -179,9 +183,9 @@ Value QIRBuilder::measureStaticQubit(Value qubit, int64_t resultId, bool verbose
 
 void QIRBuilder::restoreMeasuredQubit(Value qubit, Value bit)
 {
-    // Reset before reuse, then restore Jasp's post-measurement state.
+    // Restore the qubit's post-measurement state. It should have already been
+    // reset when it was measured using @__quantum__qis__mresetz__body.
     // Callers declare these functions before building any enclosing SCF loop.
-    callDeclared("__quantum__qis__reset__body", qubit);
     scf::IfOp::create(builder, location, bit,
                      [&](OpBuilder &thenBuilder, Location thenLocation) {
                          QIRBuilder(thenBuilder, thenLocation)

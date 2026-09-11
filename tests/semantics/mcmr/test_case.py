@@ -1,4 +1,5 @@
 """Measurement must preserve both outcomes for subsequent gates and reads."""
+import re
 import sys
 import tempfile
 import unittest
@@ -23,8 +24,24 @@ class MeasurementRestorationTest(unittest.TestCase):
                         command.append('--require-mcmr')
                     support.run(command)
                     support.run([sys.executable, support.VALIDATOR, output])
-                    self.assertEqual('__quantum__qis__reset__body' in output.read_text(),
-                                     enabled)
+                    text = output.read_text()
+                    mresetz = '__quantum__qis__mresetz__body'
+                    if enabled:
+                        self.assertIn(f'call void @{mresetz}', text)
+                        self.assertNotIn('call void @__quantum__qis__mz__body', text)
+                        self.assertNotIn('call void @__quantum__qis__reset__body', text)
+                        declaration = re.search(
+                            rf'declare void @{mresetz}\(ptr, ptr writeonly\) #(\d+)',
+                            text,
+                        )
+                        self.assertIsNotNone(declaration)
+                        self.assertRegex(
+                            text,
+                            rf'attributes #{declaration.group(1)} = '
+                            r'\{[^}]*"irreversible"[^}]*\}',
+                        )
+                    else:
+                        self.assertNotIn(mresetz, text)
                     runner = build(output, build_dir=work / 'selene')
                     entries = list(runner.run(simulator=Quest(), n_qubits=2))
                     self.assertTrue(all(label.startswith("measurement_") for label, _ in entries))

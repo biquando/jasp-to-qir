@@ -44,7 +44,7 @@ struct LowerMeasure final : OpConversionPattern<::jasp::MeasureOp> {
         QIRBuilder qir(rewriter, operation.getLoc());
         if (options.requireMcmr) {
             Type pointerType = LLVM::LLVMPointerType::get(rewriter.getContext());
-            qir.getOrDeclareFunction("__quantum__qis__reset__body", pointerType);
+            qir.getOrDeclareFunction("__quantum__qis__mresetz__body", TypeRange{pointerType, pointerType});
             qir.getOrDeclareFunction("__quantum__qis__x__body", pointerType);
         }
 
@@ -54,8 +54,11 @@ struct LowerMeasure final : OpConversionPattern<::jasp::MeasureOp> {
                 Value resultBuffer = getResultBuffer(operation, rewriter);
                 Value result =
                     qir.pointerElement(resultBuffer, qir.constantI64(0));
-                qir.call("__quantum__qis__mz__body",
-                         ValueRange{qubits, result});
+                if (options.requireMcmr) {
+                    qir.call("__quantum__qis__mresetz__body", ValueRange{qubits, result});
+                } else {
+                    qir.call("__quantum__qis__mz__body", ValueRange{qubits, result});
+                }
                 if (options.verbose) {
                     qir.recordResult(result, resultRange->base);
                 }
@@ -64,7 +67,7 @@ struct LowerMeasure final : OpConversionPattern<::jasp::MeasureOp> {
                                TypeRange{rewriter.getI1Type()})
                           .getResult();
             } else {
-                bit = qir.measureStaticQubit(qubits, resultRange->base, options.verbose);
+                bit = qir.measureStaticQubit(qubits, resultRange->base, options.verbose, options.requireMcmr);
             }
 
             if (options.requireMcmr) {
@@ -87,8 +90,11 @@ struct LowerMeasure final : OpConversionPattern<::jasp::MeasureOp> {
 
             // TODO: Trap when size exceeds options.resultBufferSize or 64,
             // since the reusable buffer and packed i64 are statically bounded.
-            qir.getOrDeclareFunction("__quantum__qis__mz__body",
-                                     TypeRange{pointerType, pointerType});
+            if (options.requireMcmr) {
+                qir.getOrDeclareFunction("__quantum__qis__mresetz__body", TypeRange{pointerType, pointerType});
+            } else {
+                qir.getOrDeclareFunction("__quantum__qis__mz__body", TypeRange{pointerType, pointerType});
+            }
             qir.getOrDeclareFunction("__quantum__rt__read_result",
                                      TypeRange{pointerType},
                                      TypeRange{rewriter.getI1Type()});
@@ -106,8 +112,11 @@ struct LowerMeasure final : OpConversionPattern<::jasp::MeasureOp> {
                     QIRBuilder loopQir(builder, location);
                     Value qubit = loopQir.pointerElement(base, index);
                     Value result = loopQir.pointerElement(resultBuffer, index);
-                    loopQir.callDeclared("__quantum__qis__mz__body",
-                                         ValueRange{qubit, result});
+                    if (options.requireMcmr) {
+                        loopQir.callDeclared("__quantum__qis__mresetz__body", ValueRange{qubit, result});
+                    } else {
+                        loopQir.callDeclared("__quantum__qis__mz__body", ValueRange{qubit, result});
+                    }
                     Value bit =
                         loopQir
                             .callDeclared("__quantum__rt__read_result",
@@ -156,7 +165,7 @@ struct LowerMeasure final : OpConversionPattern<::jasp::MeasureOp> {
             Value qubit = LLVM::IntToPtrOp::create(
                 rewriter, operation.getLoc(), pointerType, id);
             Value bit =
-                qir.measureStaticQubit(qubit, resultRange->base + index, options.verbose);
+                qir.measureStaticQubit(qubit, resultRange->base + index, options.verbose, options.requireMcmr);
             if (options.requireMcmr) {
                 qir.restoreMeasuredQubit(qubit, bit);
             }
