@@ -111,7 +111,8 @@ void populateMeasurementPatterns(TypeConverter &converter,
 
 void populateResetPatterns(TypeConverter &converter,
                            RewritePatternSet &patterns,
-                           const JaspToLLVMOptions &options);
+                           const JaspToLLVMOptions &options,
+                           const JaspToLLVMModuleInfo &moduleInfo);
 
 void populateScalarizationPatterns(TypeConverter &converter,
                                    RewritePatternSet &patterns);

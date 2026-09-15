@@ -13,9 +13,10 @@ namespace {
 struct LowerReset final : OpConversionPattern<::jasp::ResetOp> {
     LowerReset(TypeConverter &converter,
                MLIRContext *context,
-               JaspToLLVMOptions options)
+               JaspToLLVMOptions options,
+               const JaspToLLVMModuleInfo &moduleInfo)
         : OpConversionPattern(converter, context),
-          options(options)
+          options(options), moduleInfo(moduleInfo)
     {}
 
     LogicalResult
@@ -34,11 +35,28 @@ struct LowerReset final : OpConversionPattern<::jasp::ResetOp> {
 
         Value base = LLVM::ExtractValueOp::create(
             rewriter, operation.getLoc(), qubits, ArrayRef<int64_t>{0});
+        Type pointerType = LLVM::LLVMPointerType::get(rewriter.getContext());
+        if (options.resourceManagement == ResourceManagement::Static) {
+            auto size = moduleInfo.qubitArraySizes.find(operation.getQubits());
+            if (size == moduleInfo.qubitArraySizes.end()) {
+                return operation.emitError(
+                    "static array reset requires a compile-time constant qubit count");
+            }
+            for (int64_t index = 0; index < size->second; ++index) {
+                Value id = LLVM::AddOp::create(
+                    rewriter, operation.getLoc(), base, qir.constantI64(index));
+                Value qubit = LLVM::IntToPtrOp::create(
+                    rewriter, operation.getLoc(), pointerType, id);
+                qir.call("__quantum__qis__reset__body", qubit);
+            }
+            rewriter.eraseOp(operation);
+            return success();
+        }
+
         Value size = LLVM::ExtractValueOp::create(
             rewriter, operation.getLoc(), qubits, ArrayRef<int64_t>{1});
         Value zero = qir.constantI64(0);
         Value one = qir.constantI64(1);
-        Type pointerType = LLVM::LLVMPointerType::get(rewriter.getContext());
 
         qir.getOrDeclareFunction("__quantum__qis__reset__body",
                                  TypeRange{pointerType});
@@ -54,16 +72,7 @@ struct LowerReset final : OpConversionPattern<::jasp::ResetOp> {
                 Value index,
                 ValueRange) {
                 QIRBuilder loopQir(builder, location);
-                Value qubit;
-                if (options.resourceManagement == ResourceManagement::Dynamic) {
-                    qubit = loopQir.pointerElement(base, index);
-                } else {
-                    Value id =
-                        LLVM::AddOp::create(builder, location, base, index);
-                    qubit = LLVM::IntToPtrOp::create(
-                        builder, location, pointerType, id);
-                }
-
+                Value qubit = loopQir.pointerElement(base, index);
                 loopQir.callDeclared("__quantum__qis__reset__body", qubit);
                 scf::YieldOp::create(builder, location);
             });
@@ -74,15 +83,17 @@ struct LowerReset final : OpConversionPattern<::jasp::ResetOp> {
 
   private:
     JaspToLLVMOptions options;
+    const JaspToLLVMModuleInfo &moduleInfo;
 };
 
 } // namespace
 
 void populateResetPatterns(TypeConverter &converter,
                            RewritePatternSet &patterns,
-                           const JaspToLLVMOptions &options)
+                           const JaspToLLVMOptions &options,
+                           const JaspToLLVMModuleInfo &moduleInfo)
 {
-    patterns.add<LowerReset>(converter, patterns.getContext(), options);
+    patterns.add<LowerReset>(converter, patterns.getContext(), options, moduleInfo);
 }
 
 } // namespace mlir::jasp::internal

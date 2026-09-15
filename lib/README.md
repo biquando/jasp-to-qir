@@ -47,7 +47,8 @@ QIR-compliant LLVM-dialect module (ready for mlir-translate)
 There are five stages to the pipeline:
 1. Jasp's `jaspr.to_mlir(lower_stablehlo=True)` gives MLIR code that contains
    the custom Jasp dialect, as well as func/scf/math/arith/tensor dialects. We
-   first inline the MLIR functions.
+   first inline the MLIR functions because QIR doesn't support output recording
+   or qubit/result initialization in helper functions.
 2. The first custom pass (`--convert-jasp-to-llvm`) converts the Jasp-dialect
    operations/types to LLVM-dialect, matching the QIR spec.
 3. This is the second custom pass. Some math operations emitted by Jasp lower to

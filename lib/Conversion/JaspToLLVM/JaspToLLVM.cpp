@@ -182,7 +182,7 @@ struct JaspToLLVMPass final
         populateQuantumGatePatterns(*converter, patterns);
         populateMeasurementPatterns(
             *converter, patterns, options, *moduleInfo);
-        populateResetPatterns(*converter, patterns, options);
+        populateResetPatterns(*converter, patterns, options, *moduleInfo);
         populateScalarizationPatterns(*converter, patterns);
 
         populateFunctionOpInterfaceTypeConversionPattern<func::FuncOp>(

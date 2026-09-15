@@ -108,8 +108,8 @@ python tools/run_qir_on_nexus.py <.ll file> -q<num_qubits> -s<num_shots>
 - Record a measurement result immediately after its corresponding `mz` call;
   do not defer output recording to function exit. Output labels use the
   `result_<n>` form.
-- Lower Jasp `cx` to QIR `cnot`. Lower array reset through SCF so standard
-  SCF-to-CF conversion preserves source control flow instead of unrolling it.
+- Lower Jasp `cx` to QIR `cnot`. Emit individual reset calls for static arrays;
+  use an SCF loop for dynamic arrays. Preserve source control flow in both modes.
 - Unsupported quantum gates should produce a clear conversion error rather
   than silently generating different behavior.
 - Dialect operations that are parsed but not yet assigned Adaptive-Profile QIR
