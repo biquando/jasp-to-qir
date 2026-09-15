@@ -4,6 +4,7 @@ import io
 import logging
 import os
 import sys
+import time
 import unittest
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from multiprocessing import get_context
@@ -32,9 +33,11 @@ def run_test(test, verbosity, failfast, buffer):
     stream = unittest.runner._WritelnDecorator(io.StringIO())
     result = unittest.TextTestResult(stream, True, verbosity)
     result.failfast, result.buffer = failfast, buffer
+    start = time.perf_counter()
     unittest.TestSuite([test]).run(result)
+    elapsed = time.perf_counter() - start
     outcomes = {field: getattr(result, field) for field in RESULT_FIELDS}
-    return result.testsRun, outcomes, result.shouldStop, stream.getvalue(), support.REPORT
+    return result.testsRun, outcomes, result.shouldStop, stream.getvalue(), elapsed, support.REPORT
 
 
 def test_cases(suite):
@@ -53,7 +56,9 @@ class ParallelSuite(unittest.TestSuite):
             futures = [pool.submit(run_test, test, verbosity, result.failfast, result.buffer)
                        for test in test_cases(self)]
             for future in as_completed(futures):
-                count, outcomes, stopped, output, report = future.result()
+                count, outcomes, stopped, output, elapsed, report = future.result()
+                if result.showAll:
+                    output = output.rstrip("\n") + f" ({elapsed:.3f}s)\n"
                 result.stream.write(output)
                 result.stream.flush()
                 result.testsRun += count

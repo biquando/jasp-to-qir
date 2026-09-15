@@ -6,7 +6,15 @@ This repository converts Jasp MLIR into QIR 2.1 for the Adaptive Profile. Keep
 changes focused on preserving program semantics and producing validator-compliant
 QIR.
 
+## Coding Guidelines
+
+- When writing or changing code, the diff should be the minimal necessary to get
+  the job done. This doesn't mean "push things into a single line" or "don't
+  write any comments". It means "don't introduce any unnecessary complexity for
+  the sake of absolute robustness or completeness".
+
 ## References
+
 - Jasp MLIR: https://qrisp.eu/reference/Jasp/MLIR%20Interface.html#jasp-dialect-specification
 - QIR Base profile: https://github.com/qir-alliance/qir-spec/blob/2.1/specification/profiles/Base_Profile.md
 - QIR Adaptive profile: https://github.com/qir-alliance/qir-spec/blob/2.1/specification/profiles/Adaptive_Profile.md
@@ -55,6 +63,8 @@ Run all regressions with:
 ```sh
 LLVM_BIN=/opt/homebrew/opt/llvm@21/bin ./venv/bin/python tests/run_tests.py
 ```
+The testing framework requires running outside of the sandbox, so always ask for
+permission when running this command.
 
 Use `run_qir.py` to run a QIR file.
 ```sh
