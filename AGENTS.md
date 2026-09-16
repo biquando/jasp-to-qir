@@ -12,6 +12,8 @@ QIR.
   the job done. This doesn't mean "push things into a single line" or "don't
   write any comments". It means "don't introduce any unnecessary complexity for
   the sake of absolute robustness or completeness".
+- Write readable, understandable, simple code. The flow of logic should be clear
+  to a human reader.
 
 ## References
 

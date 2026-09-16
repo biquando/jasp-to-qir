@@ -26,7 +26,10 @@ struct LowerReset final : OpConversionPattern<::jasp::ResetOp> {
     {
         Value qubits = adaptor.getQubits().front();
         QIRBuilder qir(rewriter, operation.getLoc());
+        Type ptrType = LLVM::LLVMPointerType::get(rewriter.getContext());
+        qir.getOrDeclareFunction("__quantum__qis__reset__body", TypeRange{ptrType});
 
+        // Single qubit reset
         if (isa<LLVM::LLVMPointerType>(qubits.getType())) {
             qir.call("__quantum__qis__reset__body", qubits);
             rewriter.eraseOp(operation);
@@ -35,7 +38,8 @@ struct LowerReset final : OpConversionPattern<::jasp::ResetOp> {
 
         Value base = LLVM::ExtractValueOp::create(
             rewriter, operation.getLoc(), qubits, ArrayRef<int64_t>{0});
-        Type pointerType = LLVM::LLVMPointerType::get(rewriter.getContext());
+
+        // Static array reset
         if (options.resourceManagement == ResourceManagement::Static) {
             auto size = moduleInfo.qubitArraySizes.find(operation.getQubits());
             if (size == moduleInfo.qubitArraySizes.end()) {
@@ -46,31 +50,21 @@ struct LowerReset final : OpConversionPattern<::jasp::ResetOp> {
                 Value id = LLVM::AddOp::create(
                     rewriter, operation.getLoc(), base, qir.constantI64(index));
                 Value qubit = LLVM::IntToPtrOp::create(
-                    rewriter, operation.getLoc(), pointerType, id);
+                    rewriter, operation.getLoc(), ptrType, id);
                 qir.call("__quantum__qis__reset__body", qubit);
             }
             rewriter.eraseOp(operation);
             return success();
         }
 
+        // Dynamic array reset
         Value size = LLVM::ExtractValueOp::create(
             rewriter, operation.getLoc(), qubits, ArrayRef<int64_t>{1});
         Value zero = qir.constantI64(0);
         Value one = qir.constantI64(1);
-
-        qir.getOrDeclareFunction("__quantum__qis__reset__body",
-                                 TypeRange{pointerType});
-        scf::ForOp::create(
-            rewriter,
-            operation.getLoc(),
-            zero,
-            size,
-            one,
-            ValueRange{},
-            [&](OpBuilder &builder,
-                Location location,
-                Value index,
-                ValueRange) {
+        // for (i = 0; i < size; i++) { reset(qubits[i]) }
+        scf::ForOp::create(rewriter, operation.getLoc(), zero, size, one, ValueRange{},
+            [&](OpBuilder &builder, Location location, Value index, ValueRange) {
                 QIRBuilder loopQir(builder, location);
                 Value qubit = loopQir.pointerElement(base, index);
                 loopQir.callDeclared("__quantum__qis__reset__body", qubit);

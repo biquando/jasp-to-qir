@@ -36,8 +36,7 @@ struct LowerConsumeQuantumKernel final
                     OneToNOpAdaptor,
                     ConversionPatternRewriter &rewriter) const override
     {
-        rewriter.replaceOpWithNewOp<arith::ConstantOp>(
-            operation, rewriter.getBoolAttr(true));
+        rewriter.replaceOpWithNewOp<arith::ConstantOp>(operation, rewriter.getBoolAttr(true));
         return success();
     }
 };
@@ -62,51 +61,36 @@ struct LowerCreateQubits final : OpConversionPattern<jasp_ir::CreateQubitsOp> {
         QIRBuilder qir(rewriter, operation.getLoc());
 
         if (options.resourceManagement == ResourceManagement::Dynamic) {
-            Type pointerType =
-                LLVM::LLVMPointerType::get(rewriter.getContext());
-            // TODO: Reject negative or unreasonably large runtime sizes before
-            // using them as an alloca element count.
-            base = qir.dynamicPointerBuffer(size);
-            Value null =
-                LLVM::ZeroOp::create(rewriter, operation.getLoc(), pointerType);
+            // Dynamic qubit array allocation
+            Type ptrType = LLVM::LLVMPointerType::get(rewriter.getContext());
             qir.getOrDeclareFunction("__quantum__rt__qubit_allocate",
-                                     TypeRange{pointerType},
-                                     TypeRange{pointerType});
+                                     TypeRange{ptrType},
+                                     TypeRange{ptrType});
+
+            base = qir.dynamicPointerBuffer(size);
+            Value null = LLVM::ZeroOp::create(rewriter, operation.getLoc(), ptrType);
             Value zero = qir.constantI64(0);
             Value one = qir.constantI64(1);
-            scf::ForOp::create(
-                rewriter,
-                operation.getLoc(),
-                zero,
-                size,
-                one,
-                ValueRange{},
-                [&](OpBuilder &builder,
-                    Location location,
-                    Value index,
-                    ValueRange) {
+
+            scf::ForOp::create(rewriter, operation.getLoc(), zero, size, one, ValueRange{},
+                [&](OpBuilder &builder, Location location, Value index, ValueRange) {
                     QIRBuilder loopQir(builder, location);
-                    Value qubit =
-                        loopQir
-                            .callDeclared("__quantum__rt__qubit_allocate",
-                                          null,
-                                          TypeRange{pointerType})
-                            .getResult();
+                    Value qubit = loopQir
+                        .callDeclared("__quantum__rt__qubit_allocate", null, TypeRange{ptrType})
+                        .getResult();
                     loopQir.storePointerElement(qubit, base, index);
                     scf::YieldOp::create(builder, location);
                 });
         } else {
-            const QubitArrayInfo *allocation =
-                moduleInfo.getQubitAllocation(operation.getOperation());
+            // Static qubit array allocation
+            const QubitArrayInfo *allocation = moduleInfo.getQubitAllocation(operation.getOperation());
             if (!allocation) {
-                return rewriter.notifyMatchFailure(
-                    operation, "missing static qubit allocation plan");
+                return rewriter.notifyMatchFailure(operation, "missing static qubit allocation plan");
             }
             base = qir.constantI64(allocation->base);
         }
 
-        rewriter.replaceOp(
-            operation, qir.qubitArray(options.resourceManagement, base, size));
+        rewriter.replaceOp(operation, qir.qubitArray(options.resourceManagement, base, size));
         return success();
     }
 
@@ -140,23 +124,12 @@ struct LowerDeleteQubits final : OpConversionPattern<jasp_ir::DeleteQubitsOp> {
                                              adaptor.getQubits().front(),
                                              ArrayRef<int64_t>{1});
             QIRBuilder qir(rewriter, operation.getLoc());
-            Type pointerType =
-                LLVM::LLVMPointerType::get(rewriter.getContext());
-            qir.getOrDeclareFunction("__quantum__rt__qubit_release",
-                                     TypeRange{pointerType});
+            Type ptrType = LLVM::LLVMPointerType::get(rewriter.getContext());
+            qir.getOrDeclareFunction("__quantum__rt__qubit_release", TypeRange{ptrType});
             Value zero = qir.constantI64(0);
             Value one = qir.constantI64(1);
-            scf::ForOp::create(
-                rewriter,
-                operation.getLoc(),
-                zero,
-                size,
-                one,
-                ValueRange{},
-                [&](OpBuilder &builder,
-                    Location location,
-                    Value index,
-                    ValueRange) {
+            scf::ForOp::create(rewriter, operation.getLoc(), zero, size, one, ValueRange{},
+                [&](OpBuilder &builder, Location location, Value index, ValueRange) {
                     QIRBuilder loopQir(builder, location);
                     Value qubit = loopQir.pointerElement(buffer, index);
                     loopQir.callDeclared("__quantum__rt__qubit_release", qubit);
@@ -179,8 +152,7 @@ void populateQubitManagementPatterns(TypeConverter &converter,
                                      const JaspToLLVMModuleInfo &moduleInfo)
 {
     MLIRContext *context = patterns.getContext();
-    patterns.add<LowerCreateQuantumKernel, LowerConsumeQuantumKernel>(converter,
-                                                                      context);
+    patterns.add<LowerCreateQuantumKernel, LowerConsumeQuantumKernel>(converter, context);
     patterns.add<LowerCreateQubits>(converter, context, options, moduleInfo);
     patterns.add<LowerDeleteQubits>(converter, context, options);
 }
