@@ -121,6 +121,7 @@ We use the following Jasp $\to$ QIR gate translation.
 | `s_dg`, `t_dg` | `@__quantum__qis__*__adj` |
 | `p` | `@__quantum__qis__rz__body` |
 | `cx` | `@__quantum__qis__cnot__body` |
+| `gphase` | Removed because global phase has no observable effect. |
 
 ## Scalarization
 

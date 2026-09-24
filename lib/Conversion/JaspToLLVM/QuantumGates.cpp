@@ -49,6 +49,11 @@ struct LowerQuantumGate final : OpConversionPattern<::jasp::QuantumGateOp> {
                     OneToNOpAdaptor adaptor,
                     ConversionPatternRewriter &rewriter) const override
     {
+        if (operation.getGateType() == "gphase") {
+            rewriter.eraseOp(operation);
+            return success();
+        }
+
         const GateSpec *specification = findGate(operation.getGateType());
         if (!specification) {
             return rewriter.notifyMatchFailure(operation, "unsupported gate");
@@ -76,7 +81,7 @@ struct LowerQuantumGate final : OpConversionPattern<::jasp::QuantumGateOp> {
 
 bool isSupportedQuantumGate(StringRef name)
 {
-    return findGate(name) != nullptr;
+    return name == "gphase" || findGate(name) != nullptr;
 }
 
 void populateQuantumGatePatterns(TypeConverter &converter,

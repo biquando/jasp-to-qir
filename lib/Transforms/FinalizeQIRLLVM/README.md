@@ -28,6 +28,7 @@ In QIR, the module's entrypoint function needs some attributes:
  - `"entrypoint"`
  - `"qir_profiles"="adaptive_profile"`
  - `"output_labeling_schema"="labeled"`
+
 If dynamic allocation is not supported, we also need these attributes:
  - `"required_num_qubits"=...`
  - `"required_num_results"=...`
