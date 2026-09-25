@@ -1,6 +1,8 @@
 #include "JaspToQIR/Dialect/Jasp/IR/JaspOps.h"
 #include "JaspToLLVMInternal.h"
 #include "QIRBuilder.h"
+#include "llvm/Support/MathExtras.h"
+#include "mlir/Dialect/Arith/IR/Arith.h"
 
 using namespace mlir;
 
@@ -24,6 +26,8 @@ constexpr GateSpec supportedGates[] = {
     {"t", "__quantum__qis__t__body", false},
     {"t_dg", "__quantum__qis__t__adj", false},
     {"rx", "__quantum__qis__rx__body", true},
+    {"sx", "__quantum__qis__rx__body", true},
+    {"sx_dg", "__quantum__qis__rx__body", true},
     {"ry", "__quantum__qis__ry__body", true},
     {"rz", "__quantum__qis__rz__body", true},
     {"p", "__quantum__qis__rz__body", true},
@@ -62,6 +66,16 @@ struct LowerQuantumGate final : OpConversionPattern<::jasp::QuantumGateOp> {
         SmallVector<Value> arguments;
         for (ValueRange values : adaptor.getGateOperands()) {
             arguments.append(values.begin(), values.end());
+        }
+
+        // Qrisp defines sx and its adjoint as Rx(+/- pi/2).
+        if (operation.getGateType() == "sx" || operation.getGateType() == "sx_dg") {
+            double angle = llvm::numbers::pi / 2;
+            if (operation.getGateType() == "sx_dg") {
+                angle = -angle;
+            }
+            arguments.push_back(arith::ConstantOp::create(
+                rewriter, operation.getLoc(), rewriter.getF64FloatAttr(angle)));
         }
 
         // Jasp orders rotation operands as (qubit, angle), while QIR uses

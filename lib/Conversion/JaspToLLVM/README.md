@@ -120,6 +120,7 @@ We use the following Jasp $\to$ QIR gate translation.
 | `h`, `x`, `y`, `z`, `s`, `t`, `rx`, `ry`, `rz`, `cz` | `@__quantum__qis__*__body` |
 | `s_dg`, `t_dg` | `@__quantum__qis__*__adj` |
 | `p` | `@__quantum__qis__rz__body` |
+| `sx`, `sx_dg` | `@__quantum__qis__rx__body` with angles $\pi/2$ and $-\pi/2$. |
 | `cx` | `@__quantum__qis__cnot__body` |
 | `gphase` | Removed because global phase has no observable effect. |
 
