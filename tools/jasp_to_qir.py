@@ -12,6 +12,7 @@ ROOT = Path(__file__).resolve().parent.parent
 JASP_OPT = ROOT / "build/jasp-to-qir"
 LLVM_BIN = os.environ.get("LLVM_BIN")
 MLIR_TRANSLATE = Path(LLVM_BIN) / "mlir-translate" if LLVM_BIN else "mlir-translate"
+LLVM_OPT = Path(LLVM_BIN) / "opt" if LLVM_BIN else "opt"
 
 
 @dataclass(frozen=True)
@@ -100,9 +101,9 @@ def set_qir_module_flags(profile: QirProfile, llvm_ir: str) -> str:
 # name using mlir-translate.
 def set_qir_module_name(output_filename: str, input_filename: str, qir: str) -> str:
     lines = qir.splitlines()
-    if lines[0] == "; ModuleID = 'LLVMDialectModule'":
+    if lines[0].startswith("; ModuleID = "):
         lines[0] = f"; ModuleID = '{output_filename}'"
-    if lines[1] == 'source_filename = "LLVMDialectModule"':
+    if lines[1].startswith("source_filename = "):
         lines[1] = f'source_filename = "{input_filename}"'
     return '\n'.join(lines)
 
@@ -123,8 +124,15 @@ def convert(
     llvm_mlir = stem.with_suffix(".4.llvm.mlir")
     qir_mlir = stem.with_suffix(".5.qir.mlir")
     raw_llvm = stem.with_suffix(".6.raw.ll")
+    unoptimized_llvm = stem.with_suffix(".7.unoptimized.ll")
 
-    intermediates = (inline_mlir, nojasp_mlir, qirmath_mlir, llvm_mlir, qir_mlir, raw_llvm)
+    intermediates = (inline_mlir,
+                     nojasp_mlir,
+                     qirmath_mlir,
+                     llvm_mlir,
+                     qir_mlir,
+                     raw_llvm,
+                     unoptimized_llvm)
     try:
         run(
             JASP_OPT,
@@ -152,7 +160,7 @@ def convert(
             nojasp_mlir,
             "--canonicalize",
             "--convert-math-for-qir",
-            "-o", qirmath_mlir
+            "-o", qirmath_mlir,
         )
 
         run(
@@ -187,8 +195,19 @@ def convert(
 
         profile = read_profile(qir_mlir.read_text(encoding="utf-8"))
         with_module_flags = set_qir_module_flags(profile, raw_llvm.read_text())
+        unoptimized_llvm.write_text(with_module_flags)
+
+
+        run(
+            LLVM_OPT,
+            "-S",
+            "-passes=gvn",
+            unoptimized_llvm,
+            "-o", output_path,
+        )
+
         with_module_name = set_qir_module_name(
-            str(output_path.name), str(input_path.name), with_module_flags
+            str(output_path.name), str(input_path.name), output_path.read_text()
         )
         output_path.write_text(with_module_name)
     finally:

@@ -35,10 +35,15 @@ If dynamic allocation is not supported, we also need these attributes:
 
 ## Declaration attributes
 
-The following attributes should be added to function declarations:
-- measurements require `irreversible`
-- the result ptr argument of measurements requires `writeonly`
-- the result ptr argument of `@__quantum__rt__read_result` requires `readonly`
+The following attributes are added to function declarations:
+- Measurements require `irreversible`.
+- The result ptr argument of measurements requires `writeonly`.
+- The result ptr argument of `@__quantum__rt__read_result` requires `readonly`.
+- Gates and reset receive `memory(inaccessiblemem: readwrite)`, which says that
+  qubits ptrs are never dereferenced (i.e. quantum state is not directly
+  accessible). This allows the LLVM optimizer to combine multiple qubit load
+  operations into one, significantly reducing the number of loads in dynamic
+  mode.
 
 ## Entrypoint instrumentation
 

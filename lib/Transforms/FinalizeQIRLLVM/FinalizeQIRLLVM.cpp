@@ -150,6 +150,35 @@ LogicalResult addEntrypointAttributes(ModuleOp &module, OpBuilder &builder, Stri
 
 /// Add attributes to QIR function declarations.
 LogicalResult addDeclarationAttributes(ModuleOp &module, OpBuilder &builder) {
+  // Add `memory(inaccessiblemem: readwrite)` to all gates and reset.
+  auto quantumEffects = LLVM::MemoryEffectsAttr::get(
+        builder.getContext(),
+        LLVM::ModRefInfo::NoModRef, // other: none
+        LLVM::ModRefInfo::NoModRef, // argMem: none
+        LLVM::ModRefInfo::ModRef    // inaccessibleMem: readwrite
+      );
+  // TODO: This probably shouldn't be hard coded. We need a global "gate list".
+  // For example, lib/Conversion/JaspToLLVM/QuantumGates.cpp has
+  // `supportedGates` which lists every possible outputted QIR gate.
+  for (StringRef name : {"__quantum__qis__h__body",
+                         "__quantum__qis__x__body",
+                         "__quantum__qis__y__body",
+                         "__quantum__qis__z__body",
+                         "__quantum__qis__s__body",
+                         "__quantum__qis__s__adj",
+                         "__quantum__qis__t__body",
+                         "__quantum__qis__t__adj",
+                         "__quantum__qis__rx__body",
+                         "__quantum__qis__ry__body",
+                         "__quantum__qis__rz__body",
+                         "__quantum__qis__cnot__body",
+                         "__quantum__qis__cz__body",
+                         "__quantum__qis__reset__body"}) {
+    if (auto function = module.lookupSymbol<LLVM::LLVMFuncOp>(name)) {
+      function.setMemoryEffectsAttr(quantumEffects);
+    }
+  }
+
   // Measurements should be irreversible, and the result arguments should be writeonly.
   auto mz = module.lookupSymbol<LLVM::LLVMFuncOp>("__quantum__qis__mz__body");
   if (mz) {

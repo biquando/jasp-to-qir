@@ -42,6 +42,12 @@ LLVM-dialect only
   | --finalize-qir-llvm (lib/Transforms/FinalizeQIRLLVM)
   v
 QIR-compliant LLVM-dialect module (ready for mlir-translate)
+  |
+  | mlir-translate --mlir-to-llvmir
+  | replace module flags with QIR metadata
+  | opt -S -passes=gvn
+  v
+Optimized QIR (redundant qubit-handle loads removed)
 ```
 
 There are five stages to the pipeline:
@@ -58,10 +64,11 @@ There are five stages to the pipeline:
 5. This is the third custom pass. We make some small modifications to the module
    in order to make it QIR-compliant (besides the module flags, which are added
    to the actual `.ll` file in post-processing).
+6. We use `mlir-translate` to convert the MLIR module to an LLVM IR file. Then
+   we add some QIR metadata and apply some LLVM optimizations with `opt`.
 
 Use `tools/jasp_to_qir.py --keep-intermediates` to keep the intermediate files
-generated after each stage. The flag also emits one more intermediate file: the
-output of `mlir-translate`.
+generated after each stage.
 
 ## Source files
 
