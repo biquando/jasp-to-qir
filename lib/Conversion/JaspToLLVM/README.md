@@ -122,6 +122,8 @@ We use the following Jasp $\to$ QIR gate translation.
 | `p` | `@__quantum__qis__rz__body` |
 | `sx`, `sx_dg` | `@__quantum__qis__rx__body` with angles $\pi/2$ and $-\pi/2$. |
 | `cx` | `@__quantum__qis__cnot__body` |
+| `cy` | `s__adj` on the target, `cnot__body`, then `s__body` on the target. |
+| `u3(theta, phi, lambda)` | `rz(lambda)`, `ry(theta)`, then `rz(phi)` on the qubit, up to global phase. |
 | `gphase` | Removed because global phase has no observable effect. |
 
 ## Scalarization
