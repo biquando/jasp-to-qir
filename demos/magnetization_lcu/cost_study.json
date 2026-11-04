@@ -1,0 +1,967 @@
+{
+  "parameters": {
+    "n": 2,
+    "J": 1.0,
+    "B": 1.0,
+    "times": [
+      0.0,
+      0.4,
+      0.8,
+      1.2000000000000002,
+      1.6,
+      2.0,
+      2.4000000000000004,
+      2.8000000000000003,
+      3.2
+    ],
+    "steps": 100
+  },
+  "trotter_parameters": {
+    "n": 10,
+    "J": 1.0,
+    "B": 3.0,
+    "times": [
+      0.0,
+      0.1,
+      0.2,
+      0.30000000000000004,
+      0.4,
+      0.5,
+      0.6000000000000001,
+      0.7000000000000001,
+      0.8,
+      0.9,
+      1.0,
+      1.1,
+      1.2000000000000002,
+      1.3,
+      1.4000000000000001,
+      1.5,
+      1.6,
+      1.7000000000000002,
+      1.8,
+      1.9000000000000001,
+      2.0,
+      2.1,
+      2.2,
+      2.3000000000000003,
+      2.4000000000000004,
+      2.5,
+      2.6,
+      2.7,
+      2.8000000000000003,
+      2.9000000000000004
+    ],
+    "steps": 10,
+    "order": 1,
+    "shots": 250
+  },
+  "objective": "Minimize predicted bias squared plus sampling variance, equally weighted across time points and plotted observables; enumerate zero/one amplification choices and allocate attempted shots within each model's budget.",
+  "models": {
+    "tfim": {
+      "budget_hqc": 3697.5,
+      "allocated_hqc": 3695.3806,
+      "candidates": [
+        {
+          "index": 0,
+          "time": 0.0,
+          "oaa": 0,
+          "cost_per_attempt": 0.004,
+          "success_probability": 1.0,
+          "observables": {
+            "average": {
+              "mean": 1.0,
+              "variance": 0.0,
+              "bias": 0.0
+            }
+          }
+        },
+        {
+          "index": 1,
+          "time": 0.4,
+          "oaa": 0,
+          "cost_per_attempt": 0.1858,
+          "success_probability": 0.24801040891876772,
+          "observables": {
+            "average": {
+              "mean": 0.7123588054250773,
+              "variance": 0.2492734416965774,
+              "bias": -7.183280554379223e-06
+            }
+          }
+        },
+        {
+          "index": 1,
+          "time": 0.4,
+          "oaa": 1,
+          "cost_per_attempt": 0.6198,
+          "success_probability": 0.9999523723160788,
+          "observables": {
+            "average": {
+              "mean": 0.7123588054250797,
+              "variance": 0.24927346015767415,
+              "bias": -7.183280552047755e-06
+            }
+          }
+        },
+        {
+          "index": 2,
+          "time": 0.8,
+          "oaa": 0,
+          "cost_per_attempt": 0.1858,
+          "success_probability": 0.1911425466644976,
+          "observables": {
+            "average": {
+              "mean": 0.16242539886895263,
+              "variance": 0.5923538162296602,
+              "bias": -6.759037194853379e-05
+            }
+          }
+        },
+        {
+          "index": 2,
+          "time": 0.8,
+          "oaa": 1,
+          "cost_per_attempt": 0.6198,
+          "success_probability": 0.9551672985799433,
+          "observables": {
+            "average": {
+              "mean": 0.16242539886906304,
+              "variance": 0.592354136703754,
+              "bias": -6.759037183812211e-05
+            }
+          }
+        },
+        {
+          "index": 3,
+          "time": 1.2000000000000002,
+          "oaa": 0,
+          "cost_per_attempt": 0.1858,
+          "success_probability": 0.20209261742386497,
+          "observables": {
+            "average": {
+              "mean": -0.1406929712017756,
+              "variance": 0.9020079833397289,
+              "bias": -0.00014580147078482875
+            }
+          }
+        },
+        {
+          "index": 3,
+          "time": 1.2000000000000002,
+          "oaa": 1,
+          "cost_per_attempt": 0.6198,
+          "success_probability": 0.9706993433090151,
+          "observables": {
+            "average": {
+              "mean": -0.1406929712043106,
+              "variance": 0.9020083421863248,
+              "bias": -0.00014580147331982873
+            }
+          }
+        },
+        {
+          "index": 4,
+          "time": 1.6,
+          "oaa": 0,
+          "cost_per_attempt": 0.1858,
+          "success_probability": 0.1916776681690053,
+          "observables": {
+            "average": {
+              "mean": -0.16262232003867524,
+              "variance": 0.90194248469426,
+              "bias": -0.0002562955966003144
+            }
+          }
+        },
+        {
+          "index": 4,
+          "time": 1.6,
+          "oaa": 1,
+          "cost_per_attempt": 0.6198,
+          "success_probability": 0.9560079377546155,
+          "observables": {
+            "average": {
+              "mean": -0.16262232006701877,
+              "variance": 0.9019434513852594,
+              "bias": -0.0002562956249438364
+            }
+          }
+        },
+        {
+          "index": 5,
+          "time": 2.0,
+          "oaa": 0,
+          "cost_per_attempt": 0.1858,
+          "success_probability": 0.20763859428216486,
+          "observables": {
+            "average": {
+              "mean": -0.2966420367717925,
+              "variance": 0.5343584845032362,
+              "bias": -0.0006932237086502702
+            }
+          }
+        },
+        {
+          "index": 5,
+          "time": 2.0,
+          "oaa": 1,
+          "cost_per_attempt": 0.6198,
+          "success_probability": 0.9772498612550916,
+          "observables": {
+            "average": {
+              "mean": -0.2966420370947614,
+              "variance": 0.5343723631533266,
+              "bias": -0.000693224031619144
+            }
+          }
+        },
+        {
+          "index": 6,
+          "time": 2.4000000000000004,
+          "oaa": 0,
+          "cost_per_attempt": 0.1858,
+          "success_probability": 0.22225210172973658,
+          "observables": {
+            "average": {
+              "mean": -0.6894854695041674,
+              "variance": 0.27369063563079943,
+              "bias": -0.0010654833163890043
+            }
+          }
+        },
+        {
+          "index": 6,
+          "time": 2.4000000000000004,
+          "oaa": 1,
+          "cost_per_attempt": 0.6198,
+          "success_probability": 0.9904188131053298,
+          "observables": {
+            "average": {
+              "mean": -0.6894854728344778,
+              "variance": 0.273711664255108,
+              "bias": -0.001065486646699365
+            }
+          }
+        },
+        {
+          "index": 7,
+          "time": 2.8000000000000003,
+          "oaa": 0,
+          "cost_per_attempt": 0.1858,
+          "success_probability": 0.548096720916124,
+          "observables": {
+            "average": {
+              "mean": -0.9449003124579761,
+              "variance": 0.10703221135279273,
+              "bias": 0.00041474385646611545
+            }
+          }
+        },
+        {
+          "index": 7,
+          "time": 2.8000000000000003,
+          "oaa": 1,
+          "cost_per_attempt": 0.6198,
+          "success_probability": 0.35749005096118797,
+          "observables": {
+            "average": {
+              "mean": -0.9449000133622061,
+              "variance": 0.10703290789802766,
+              "bias": 0.0004150429522361554
+            }
+          }
+        },
+        {
+          "index": 8,
+          "time": 3.2,
+          "oaa": 0,
+          "cost_per_attempt": 0.1858,
+          "success_probability": 0.2424521269761925,
+          "observables": {
+            "average": {
+              "mean": -0.6576096343887647,
+              "variance": 0.33051642728670716,
+              "bias": 0.004403371749024276
+            }
+          }
+        },
+        {
+          "index": 8,
+          "time": 3.2,
+          "oaa": 1,
+          "cost_per_attempt": 0.6198,
+          "success_probability": 0.9993094033596119,
+          "observables": {
+            "average": {
+              "mean": -0.6576096668610069,
+              "variance": 0.3305875995199474,
+              "bias": 0.004403339276782159
+            }
+          }
+        }
+      ],
+      "selected": [
+        {
+          "index": 0,
+          "time": 0.0,
+          "oaa": 0,
+          "cost_per_attempt": 0.004,
+          "success_probability": 1.0,
+          "observables": {
+            "average": {
+              "mean": 1.0,
+              "variance": 0.0,
+              "bias": 0.0
+            }
+          },
+          "shots": 2
+        },
+        {
+          "index": 1,
+          "time": 0.4,
+          "oaa": 1,
+          "cost_per_attempt": 0.6198,
+          "success_probability": 0.9999523723160788,
+          "observables": {
+            "average": {
+              "mean": 0.7123588054250797,
+              "variance": 0.24927346015767415,
+              "bias": -7.183280552047755e-06
+            }
+          },
+          "shots": 555
+        },
+        {
+          "index": 2,
+          "time": 0.8,
+          "oaa": 1,
+          "cost_per_attempt": 0.6198,
+          "success_probability": 0.9551672985799433,
+          "observables": {
+            "average": {
+              "mean": 0.16242539886906304,
+              "variance": 0.592354136703754,
+              "bias": -6.759037183812211e-05
+            }
+          },
+          "shots": 874
+        },
+        {
+          "index": 3,
+          "time": 1.2000000000000002,
+          "oaa": 1,
+          "cost_per_attempt": 0.6198,
+          "success_probability": 0.9706993433090151,
+          "observables": {
+            "average": {
+              "mean": -0.1406929712043106,
+              "variance": 0.9020083421863248,
+              "bias": -0.00014580147331982873
+            }
+          },
+          "shots": 1070
+        },
+        {
+          "index": 4,
+          "time": 1.6,
+          "oaa": 1,
+          "cost_per_attempt": 0.6198,
+          "success_probability": 0.9560079377546155,
+          "observables": {
+            "average": {
+              "mean": -0.16262232006701877,
+              "variance": 0.9019434513852594,
+              "bias": -0.0002562956249438364
+            }
+          },
+          "shots": 1078
+        },
+        {
+          "index": 5,
+          "time": 2.0,
+          "oaa": 1,
+          "cost_per_attempt": 0.6198,
+          "success_probability": 0.9772498612550916,
+          "observables": {
+            "average": {
+              "mean": -0.2966420370947614,
+              "variance": 0.5343723631533266,
+              "bias": -0.000693224031619144
+            }
+          },
+          "shots": 821
+        },
+        {
+          "index": 6,
+          "time": 2.4000000000000004,
+          "oaa": 1,
+          "cost_per_attempt": 0.6198,
+          "success_probability": 0.9904188131053298,
+          "observables": {
+            "average": {
+              "mean": -0.6894854728344778,
+              "variance": 0.273711664255108,
+              "bias": -0.001065486646699365
+            }
+          },
+          "shots": 584
+        },
+        {
+          "index": 7,
+          "time": 2.8000000000000003,
+          "oaa": 0,
+          "cost_per_attempt": 0.1858,
+          "success_probability": 0.548096720916124,
+          "observables": {
+            "average": {
+              "mean": -0.9449003124579761,
+              "variance": 0.10703221135279273,
+              "bias": 0.00041474385646611545
+            }
+          },
+          "shots": 896
+        },
+        {
+          "index": 8,
+          "time": 3.2,
+          "oaa": 1,
+          "cost_per_attempt": 0.6198,
+          "success_probability": 0.9993094033596119,
+          "observables": {
+            "average": {
+              "mean": -0.6576096668610069,
+              "variance": 0.3305875995199474,
+              "bias": 0.004403339276782159
+            }
+          },
+          "shots": 639
+        }
+      ],
+      "predicted_rmse": 0.023090468022756126,
+      "predicted_rmse_by_observable": {
+        "average": 0.023090468022756126
+      },
+      "uniform_unamplified_shots": 2450,
+      "uniform_unamplified_rmse": 0.029112747090065505
+    },
+    "heis": {
+      "budget_hqc": 10987.5,
+      "allocated_hqc": 10985.131599999999,
+      "candidates": [
+        {
+          "index": 0,
+          "time": 0.0,
+          "oaa": 0,
+          "cost_per_attempt": 0.0048,
+          "success_probability": 0.9999999999999999,
+          "observables": {
+            "average": {
+              "mean": 0.16221167441072895,
+              "variance": 0.33838834764831854,
+              "bias": 1.3877787807814457e-16
+            },
+            "staggered": {
+              "mean": 0.5448951067758188,
+              "variance": 0.33838834764831854,
+              "bias": 2.220446049250313e-16
+            }
+          }
+        },
+        {
+          "index": 1,
+          "time": 0.4,
+          "oaa": 0,
+          "cost_per_attempt": 0.1858,
+          "success_probability": 0.1814256429464763,
+          "observables": {
+            "average": {
+              "mean": 0.11301044247150266,
+              "variance": 0.42155647413693037,
+              "bias": -3.5194248899916847e-06
+            },
+            "staggered": {
+              "mean": -0.34233950453023765,
+              "variance": 0.44847582939345626,
+              "bias": -2.0421707946138845e-05
+            }
+          }
+        },
+        {
+          "index": 1,
+          "time": 0.4,
+          "oaa": 1,
+          "cost_per_attempt": 0.6182,
+          "success_probability": 0.9384112191800598,
+          "observables": {
+            "average": {
+              "mean": 0.11301045836804591,
+              "variance": 0.4215564745039937,
+              "bias": -3.5035283467432787e-06
+            },
+            "staggered": {
+              "mean": -0.3423394970570967,
+              "variance": 0.4484758305501446,
+              "bias": -2.0414234805199438e-05
+            }
+          }
+        },
+        {
+          "index": 2,
+          "time": 0.8,
+          "oaa": 0,
+          "cost_per_attempt": 0.1858,
+          "success_probability": 0.24015208404451308,
+          "observables": {
+            "average": {
+              "mean": -0.00477543508188473,
+              "variance": 0.4998605377348672,
+              "bias": -3.8931677399225983e-05
+            },
+            "staggered": {
+              "mean": 0.04305924296382793,
+              "variance": 0.4982625590802932,
+              "bias": 0.00022185718077388783
+            }
+          }
+        },
+        {
+          "index": 2,
+          "time": 0.8,
+          "oaa": 1,
+          "cost_per_attempt": 0.616,
+          "success_probability": 0.9988209415723541,
+          "observables": {
+            "average": {
+              "mean": -0.0047754509598257056,
+              "variance": 0.49986087162034887,
+              "bias": -3.894755534020189e-05
+            },
+            "staggered": {
+              "mean": 0.043059230079226546,
+              "variance": 0.49826222615276566,
+              "bias": 0.000221844296172502
+            }
+          }
+        },
+        {
+          "index": 3,
+          "time": 1.2000000000000002,
+          "oaa": 0,
+          "cost_per_attempt": 0.1858,
+          "success_probability": 0.18821862409381807,
+          "observables": {
+            "average": {
+              "mean": -0.11970050421732298,
+              "variance": 0.41204834640112986,
+              "bias": -8.663491942886847e-05
+            },
+            "staggered": {
+              "mean": 0.27502773686351095,
+              "variance": 0.4979831868447241,
+              "bias": -0.0006415490142106517
+            }
+          }
+        },
+        {
+          "index": 3,
+          "time": 1.2000000000000002,
+          "oaa": 1,
+          "cost_per_attempt": 0.6182,
+          "success_probability": 0.9504236877654084,
+          "observables": {
+            "average": {
+              "mean": -0.11970193631942462,
+              "variance": 0.41204823529435186,
+              "bias": -8.806702153051071e-05
+            },
+            "staggered": {
+              "mean": 0.2750271235791517,
+              "variance": 0.49798329244280654,
+              "bias": -0.0006421622985698927
+            }
+          }
+        },
+        {
+          "index": 4,
+          "time": 1.6,
+          "oaa": 0,
+          "cost_per_attempt": 0.1858,
+          "success_probability": 0.7608456881367902,
+          "observables": {
+            "average": {
+              "mean": -0.16190746689427618,
+              "variance": 0.33896588777556386,
+              "bias": 2.7600242873876413e-05
+            },
+            "staggered": {
+              "mean": -0.53678398144547,
+              "variance": 0.34668304165186425,
+              "bias": 0.0003319962193638615
+            }
+          }
+        },
+        {
+          "index": 4,
+          "time": 1.6,
+          "oaa": 1,
+          "cost_per_attempt": 0.6182,
+          "success_probability": 0.0014319626722021723,
+          "observables": {
+            "average": {
+              "mean": -0.160623889441634,
+              "variance": 0.3397626925336746,
+              "bias": 0.0013111776955160581
+            },
+            "staggered": {
+              "mean": -0.53664501602242,
+              "variance": 0.3464494003852635,
+              "bias": 0.0004709616424138918
+            }
+          }
+        },
+        {
+          "index": 5,
+          "time": 2.0,
+          "oaa": 0,
+          "cost_per_attempt": 0.1858,
+          "success_probability": 0.17640175549948137,
+          "observables": {
+            "average": {
+              "mean": -0.10555306819572022,
+              "variance": 0.43129647136613364,
+              "bias": 0.0004755580124578551
+            },
+            "staggered": {
+              "mean": 0.3997472677375832,
+              "variance": 0.39776420036467297,
+              "bias": 0.0020480856126112723
+            }
+          }
+        },
+        {
+          "index": 5,
+          "time": 2.0,
+          "oaa": 1,
+          "cost_per_attempt": 0.6182,
+          "success_probability": 0.928621024037511,
+          "observables": {
+            "average": {
+              "mean": -0.1055620069798375,
+              "variance": 0.4312977277966115,
+              "bias": 0.0004666192283405701
+            },
+            "staggered": {
+              "mean": 0.39974267617249776,
+              "variance": 0.3977647277322267,
+              "bias": 0.002043494047525851
+            }
+          }
+        },
+        {
+          "index": 6,
+          "time": 2.4000000000000004,
+          "oaa": 0,
+          "cost_per_attempt": 0.1858,
+          "success_probability": 0.22258931530314613,
+          "observables": {
+            "average": {
+              "mean": 0.015235209129759009,
+              "variance": 0.4986262811798413,
+              "bias": 0.0010418525168096604
+            },
+            "staggered": {
+              "mean": -0.13295229113098694,
+              "variance": 0.4834652955059524,
+              "bias": -0.005784957686756881
+            }
+          }
+        },
+        {
+          "index": 6,
+          "time": 2.4000000000000004,
+          "oaa": 1,
+          "cost_per_attempt": 0.6182,
+          "success_probability": 0.9906543270324247,
+          "observables": {
+            "average": {
+              "mean": 0.015238906013812864,
+              "variance": 0.4986501304474331,
+              "bias": 0.0010455494008635158
+            },
+            "staggered": {
+              "mean": -0.13294937565963538,
+              "variance": 0.4834421088077821,
+              "bias": -0.00578204221540532
+            }
+          }
+        },
+        {
+          "index": 7,
+          "time": 2.8000000000000003,
+          "oaa": 0,
+          "cost_per_attempt": 0.1858,
+          "success_probability": 0.19815325917279258,
+          "observables": {
+            "average": {
+              "mean": 0.12678495666831646,
+              "variance": 0.40186110044105644,
+              "bias": 0.0009791168993409372
+            },
+            "staggered": {
+              "mean": -0.1906701449423736,
+              "variance": 0.5457093701492107,
+              "bias": 0.009074822816119238
+            }
+          }
+        },
+        {
+          "index": 7,
+          "time": 2.8000000000000003,
+          "oaa": 1,
+          "cost_per_attempt": 0.6182,
+          "success_probability": 0.965513070219503,
+          "observables": {
+            "average": {
+              "mean": 0.12683315552121885,
+              "variance": 0.40185268985537437,
+              "bias": 0.001027315752243324
+            },
+            "staggered": {
+              "mean": -0.19065171818235246,
+              "variance": 0.5457125831592731,
+              "bias": 0.009093249576140383
+            }
+          }
+        },
+        {
+          "index": 8,
+          "time": 3.2,
+          "oaa": 0,
+          "cost_per_attempt": 0.1858,
+          "success_probability": 0.5892422220696593,
+          "observables": {
+            "average": {
+              "mean": 0.16065365117578825,
+              "variance": 0.3410176512899842,
+              "bias": -0.00045253749546186883
+            },
+            "staggered": {
+              "mean": 0.5086388695957331,
+              "variance": 0.37445925341027897,
+              "bias": -0.005376026229365172
+            }
+          }
+        },
+        {
+          "index": 8,
+          "time": 3.2,
+          "oaa": 1,
+          "cost_per_attempt": 0.6182,
+          "success_probability": 0.24364533940897548,
+          "observables": {
+            "average": {
+              "mean": 0.1617146257283252,
+              "variance": 0.3403695102594756,
+              "bias": 0.0006084370570750841
+            },
+            "staggered": {
+              "mean": 0.5087617718007689,
+              "variance": 0.3746403291202143,
+              "bias": -0.005253124024329425
+            }
+          }
+        }
+      ],
+      "selected": [
+        {
+          "index": 0,
+          "time": 0.0,
+          "oaa": 0,
+          "cost_per_attempt": 0.0048,
+          "success_probability": 0.9999999999999999,
+          "observables": {
+            "average": {
+              "mean": 0.16221167441072895,
+              "variance": 0.33838834764831854,
+              "bias": 1.3877787807814457e-16
+            },
+            "staggered": {
+              "mean": 0.5448951067758188,
+              "variance": 0.33838834764831854,
+              "bias": 2.220446049250313e-16
+            }
+          },
+          "shots": 23366
+        },
+        {
+          "index": 1,
+          "time": 0.4,
+          "oaa": 1,
+          "cost_per_attempt": 0.6182,
+          "success_probability": 0.9384112191800598,
+          "observables": {
+            "average": {
+              "mean": 0.11301045836804591,
+              "variance": 0.4215564745039937,
+              "bias": -3.5035283467432787e-06
+            },
+            "staggered": {
+              "mean": -0.3423394970570967,
+              "variance": 0.4484758305501446,
+              "bias": -2.0414234805199438e-05
+            }
+          },
+          "shots": 2411
+        },
+        {
+          "index": 2,
+          "time": 0.8,
+          "oaa": 1,
+          "cost_per_attempt": 0.616,
+          "success_probability": 0.9988209415723541,
+          "observables": {
+            "average": {
+              "mean": -0.0047754509598257056,
+              "variance": 0.49986087162034887,
+              "bias": -3.894755534020189e-05
+            },
+            "staggered": {
+              "mean": 0.043059230079226546,
+              "variance": 0.49826222615276566,
+              "bias": 0.000221844296172502
+            }
+          },
+          "shots": 2508
+        },
+        {
+          "index": 3,
+          "time": 1.2000000000000002,
+          "oaa": 1,
+          "cost_per_attempt": 0.6182,
+          "success_probability": 0.9504236877654084,
+          "observables": {
+            "average": {
+              "mean": -0.11970193631942462,
+              "variance": 0.41204823529435186,
+              "bias": -8.806702153051071e-05
+            },
+            "staggered": {
+              "mean": 0.2750271235791517,
+              "variance": 0.49798329244280654,
+              "bias": -0.0006421622985698927
+            }
+          },
+          "shots": 2450
+        },
+        {
+          "index": 4,
+          "time": 1.6,
+          "oaa": 0,
+          "cost_per_attempt": 0.1858,
+          "success_probability": 0.7608456881367902,
+          "observables": {
+            "average": {
+              "mean": -0.16190746689427618,
+              "variance": 0.33896588777556386,
+              "bias": 2.7600242873876413e-05
+            },
+            "staggered": {
+              "mean": -0.53678398144547,
+              "variance": 0.34668304165186425,
+              "bias": 0.0003319962193638615
+            }
+          },
+          "shots": 4335
+        },
+        {
+          "index": 5,
+          "time": 2.0,
+          "oaa": 1,
+          "cost_per_attempt": 0.6182,
+          "success_probability": 0.928621024037511,
+          "observables": {
+            "average": {
+              "mean": -0.1055620069798375,
+              "variance": 0.4312977277966115,
+              "bias": 0.0004666192283405701
+            },
+            "staggered": {
+              "mean": 0.39974267617249776,
+              "variance": 0.3977647277322267,
+              "bias": 0.002043494047525851
+            }
+          },
+          "shots": 2366
+        },
+        {
+          "index": 6,
+          "time": 2.4000000000000004,
+          "oaa": 1,
+          "cost_per_attempt": 0.6182,
+          "success_probability": 0.9906543270324247,
+          "observables": {
+            "average": {
+              "mean": 0.015238906013812864,
+              "variance": 0.4986501304474331,
+              "bias": 0.0010455494008635158
+            },
+            "staggered": {
+              "mean": -0.13294937565963538,
+              "variance": 0.4834421088077821,
+              "bias": -0.00578204221540532
+            }
+          },
+          "shots": 2493
+        },
+        {
+          "index": 7,
+          "time": 2.8000000000000003,
+          "oaa": 1,
+          "cost_per_attempt": 0.6182,
+          "success_probability": 0.965513070219503,
+          "observables": {
+            "average": {
+              "mean": 0.12683315552121885,
+              "variance": 0.40185268985537437,
+              "bias": 0.001027315752243324
+            },
+            "staggered": {
+              "mean": -0.19065171818235246,
+              "variance": 0.5457125831592731,
+              "bias": 0.009093249576140383
+            }
+          },
+          "shots": 2481
+        },
+        {
+          "index": 8,
+          "time": 3.2,
+          "oaa": 0,
+          "cost_per_attempt": 0.1858,
+          "success_probability": 0.5892422220696593,
+          "observables": {
+            "average": {
+              "mean": 0.16065365117578825,
+              "variance": 0.3410176512899842,
+              "bias": -0.00045253749546186883
+            },
+            "staggered": {
+              "mean": 0.5086388695957331,
+              "variance": 0.37445925341027897,
+              "bias": -0.005376026229365172
+            }
+          },
+          "shots": 5032
+        }
+      ],
+      "predicted_rmse": 0.012855762489164955,
+      "predicted_rmse_by_observable": {
+        "average": 0.01230913062038095,
+        "staggered": 0.013380080781745735
+      },
+      "uniform_unamplified_shots": 7338,
+      "uniform_unamplified_rmse": 0.01546450926357724
+    }
+  }
+}
