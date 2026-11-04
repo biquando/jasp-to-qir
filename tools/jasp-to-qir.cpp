@@ -2,6 +2,7 @@
 #include "JaspToQIR/Conversion/JaspToLLVM/JaspToLLVM.h"
 #include "JaspToQIR/Conversion/MathForQIR/MathForQIR.h"
 #include "JaspToQIR/Transforms/FinalizeQIRLLVM/FinalizeQIRLLVM.h"
+#include "JaspToQIR/Transforms/QEC/QEC.h"
 #include "mlir/IR/Dialect.h"
 #include "mlir/IR/DialectRegistry.h"
 #include "mlir/InitAllDialects.h"
@@ -20,6 +21,7 @@ int main(int argc, char **argv) {
   mlir::registerPass([] { return jasp_to_qir::createJaspToLLVMPass(); });
   mlir::registerPass([] { return jasp_to_qir::createMathForQIRPass(); });
   mlir::registerPass([] { return jasp_to_qir::createFinalizeQIRLLVMPass(); });
+  mlir::registerPass([] { return jasp_to_qir::createQECPass(); });
   return mlir::asMainReturnCode(
       mlir::MlirOptMain(argc, argv, "Jasp to QIR\n", registry));
 }

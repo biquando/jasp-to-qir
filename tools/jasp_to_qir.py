@@ -116,6 +116,7 @@ def convert(
     result_buffer_size: int = 64,
     require_mcmr: bool = False,
     verbose: bool = False,
+    qec_code: str | None = None,
 ) -> None:
     stem = output_path.with_suffix("")
     inline_mlir = stem.with_suffix(".1.inline.mlir")
@@ -126,26 +127,35 @@ def convert(
     raw_llvm = stem.with_suffix(".6.raw.ll")
     unoptimized_llvm = stem.with_suffix(".7.unoptimized.ll")
 
-    intermediates = (inline_mlir,
+    intermediates = [inline_mlir,
                      nojasp_mlir,
                      qirmath_mlir,
                      llvm_mlir,
                      qir_mlir,
                      raw_llvm,
-                     unoptimized_llvm)
+                     unoptimized_llvm]
+    inline_passes = ("--inline", "--canonicalize", "--symbol-dce")
     try:
         run(
             JASP_OPT,
             input_path,
-            "--inline",
-            "--canonicalize",
-            "--symbol-dce",
+            *inline_passes,
             "-o", inline_mlir,
         )
 
+        lowering_input = inline_mlir
+        lowering_prefix = ()
+        if qec_code is not None:
+            qec_mlir = stem.with_suffix(".1.qec.mlir")
+            intermediates.append(qec_mlir)
+            run(JASP_OPT, inline_mlir, f"--qec=code={qec_code}", "-o", qec_mlir)
+            lowering_input = qec_mlir
+            lowering_prefix = inline_passes
+
         run(
             JASP_OPT,
-            inline_mlir,
+            lowering_input,
+            *lowering_prefix,
             "--convert-jasp-to-llvm="
             f"resource-management={resource_management} "
             f"output-formats={output_formats} "
@@ -253,6 +263,10 @@ def main() -> None:
         "--verbose", action="store_true",
         help="also record all intermediate measurement results",
     )
+    parser.add_argument(
+        "--qec", dest="qec_code", metavar="CODE",
+        help="apply a QEC code before lowering",
+    )
     args = parser.parse_args()
 
     try:
@@ -265,6 +279,7 @@ def main() -> None:
             args.result_buffer_size,
             args.require_mcmr,
             args.verbose,
+            qec_code=args.qec_code,
         )
 
     except ValueError as error:

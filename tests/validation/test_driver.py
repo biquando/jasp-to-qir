@@ -8,6 +8,18 @@ from tests import support
 
 
 class DriverTest(unittest.TestCase):
+    def test_dummy_qec_round_trip(self):
+        work = Path(tempfile.mkdtemp(dir=support.temp_dir()))
+        output = work / 'output.ll'
+        command = [sys.executable, support.DRIVER,
+                   support.TESTS / 'validation/measurement_feedback_loop/input.mlir',
+                   output, '--static']
+        support.run(command)
+        baseline = output.read_bytes()
+        support.run([*command, '--qec', 'dummy', '--keep-intermediates'])
+        support.require_contains(work / 'output.1.qec.mlir', 'call @__qec_dummy_cx')
+        self.assertEqual(output.read_bytes(), baseline)
+
     def test_intermediate_cleanup_and_retention(self):
         for keep in (False, True):
             with self.subTest(keep=keep):

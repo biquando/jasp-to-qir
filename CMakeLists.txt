@@ -27,12 +27,14 @@ add_subdirectory(lib/Dialect/Jasp/IR)
 add_subdirectory(lib/Conversion/JaspToLLVM)
 add_subdirectory(lib/Conversion/MathForQIR)
 add_subdirectory(lib/Transforms/FinalizeQIRLLVM)
+add_subdirectory(lib/Transforms/QEC)
 
 add_executable(jasp-to-qir tools/jasp-to-qir.cpp)
 target_link_libraries(jasp-to-qir PRIVATE
   JaspToQIRJaspToLLVM
   JaspToQIRMathForQIR
   JaspToQIRFinalizeQIRLLVM
+  JaspToQIRQEC
   LLVM
 )
 mlir_target_link_libraries(jasp-to-qir PRIVATE

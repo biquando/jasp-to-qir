@@ -77,6 +77,8 @@ Use `--keep-intermediates` to retain the generated intermediate files.
 Use `--static` to use static qubit/result allocation, if possible. Note that
 only the most simple Qrisp/Jasp programs are compatible with this flag.
 
+Use `--qec <code>` to insert error correction.
+
 ## Simulating a QIR program
 
 Run a generated QIR file through qir-qis and Selene/QuEST:
