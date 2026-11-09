@@ -8,8 +8,11 @@ to QIR 2.1 LLVM IR for the Adaptive Profile. The target backend is
 ## Build/Setup
 
 Dependencies:
+- clang 21
+- cmake >= 3.20
 - LLVM 21
-- MLIR 21 (usually comes with LLVM)
+- MLIR 21
+- Python 3.13
 
 > [!IMPORTANT]
 > If LLVM 21 is not your default LLVM version, then set the environment variable
@@ -19,10 +22,10 @@ Dependencies:
 Build the pipeline and install the Python dependencies:
 
 ```sh
-cmake -S . -B build -DMLIR_DIR=/path/to/your/llvm@21/lib/cmake/mlir
+cmake -S . -B build -DMLIR_DIR=/path/to/your/llvm@21/lib/cmake/mlir # make sure to set this path!
 cmake --build build -j
 
-python3 -m venv venv
+python3.13 -m venv venv
 . venv/bin/activate
 pip install -r requirements.txt
 ```
